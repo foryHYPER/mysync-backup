@@ -1,0 +1,6 @@
+{
+  "table": [
+    { "header": "Projekt Alpha", "id": 1, "type": "Beratung", "status": "laufend", "target": "Kunde A", "limit": "2024-08-01", "reviewer": "Beraterin Müller" },
+    { "header": "Projekt Beta", "id": 2, "type": "Implementierung", "status": "abgeschlossen", "target": "Kunde B", "limit": "2024-06-15", "reviewer": "Berater Schmidt" }
+  ]
+} 

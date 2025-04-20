@@ -30,13 +30,31 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
       if (error) throw error
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push('/protected')
+
+      // User-ID holen
+      const user = data.user
+      if (!user) throw new Error("Kein Benutzer gefunden")
+
+      // Rolle aus profiles-Tabelle holen
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single()
+
+      if (profileError || !profile?.role) throw new Error("Keine Rolle gefunden")
+
+      // Rollenbasierte Weiterleitung
+      if (["admin", "client", "candidate"].includes(profile.role)) {
+        router.push("/protected/dashboard")
+      } else {
+        router.push("/auth/login")
+      }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
     } finally {

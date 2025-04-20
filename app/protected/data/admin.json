@@ -1,0 +1,6 @@
+{
+  "table": [
+    { "header": "Admin-Report 1", "id": 1, "type": "Report", "status": "offen", "target": "System", "limit": "2024-08-01", "reviewer": "Admin" },
+    { "header": "Admin-Report 2", "id": 2, "type": "Report", "status": "abgeschlossen", "target": "System", "limit": "2024-07-01", "reviewer": "Admin" }
+  ]
+} 
