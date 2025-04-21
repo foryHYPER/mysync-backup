@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-export default function CandidateProfileForm() {
+export default function CandidateProfileForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -148,6 +148,7 @@ export default function CandidateProfileForm() {
         console.error("Update/Insert error:", updateError);
       } else {
         setSuccess(true);
+        if (onSuccess) onSuccess();
       }
     } catch (err: any) {
       setError(err.message || "Unbekannter Fehler beim Speichern.");

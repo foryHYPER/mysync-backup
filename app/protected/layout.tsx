@@ -9,7 +9,12 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     redirect('/auth/login');
   }
 
-  return (
-    <>{children}</>
-  );
+  // Die Rolle kann weiterhin geladen werden, falls du sie für andere Zwecke brauchst
+  // const { data: profile } = await supabase
+  //   .from("profiles")
+  //   .select("role")
+  //   .eq("id", user.id)
+  //   .single();
+
+  return <>{children}</>;
 } 
