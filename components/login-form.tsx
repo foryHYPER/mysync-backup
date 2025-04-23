@@ -51,7 +51,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
       // Rollenbasierte Weiterleitung
       if (["admin", "client", "candidate"].includes(profile.role)) {
-        router.push("/protected/dashboard")
+        router.push("/dashboard")
       } else {
         router.push("/auth/login")
       }

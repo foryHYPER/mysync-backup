@@ -28,6 +28,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { LogoutButton } from "@/components/logout-button"
 
 export function NavUser({
   user,
@@ -38,6 +39,7 @@ export function NavUser({
     avatar: string
   }
 }) {
+  console.log("NavUser user prop:", user);
   const { isMobile } = useSidebar()
 
   return (
@@ -97,11 +99,8 @@ export function NavUser({
                 Notifications
               </DropdownMenuItem>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <IconLogout />
-              Log out
-            </DropdownMenuItem>
+            <DropdownMenuSeparator />       
+              <LogoutButton />            
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

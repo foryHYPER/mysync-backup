@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
-import SkillTagInput, { Skill } from "@/app/protected/candidate-profile/SkillTagInput";
+import SkillTagInput, { Skill } from "@/app/dashboard/candidate-profile/SkillTagInput";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";

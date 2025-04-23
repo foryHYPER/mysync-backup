@@ -10,7 +10,7 @@ import { Form, FormItem, FormLabel, FormControl, FormDescription, FormMessage, F
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon } from "lucide-react";
-import SkillTagInput, { Skill } from "@/app/protected/candidate-profile/SkillTagInput";
+import SkillTagInput, { Skill } from "@/app/dashboard/candidate-profile/SkillTagInput";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";

@@ -161,6 +161,7 @@ type NavItem = {
 };
 
 export function AppSidebar({ user, role, ...props }: React.ComponentProps<typeof Sidebar> & { user: { name: string, email: string, avatar: string }, role: string }) {
+  console.log("Sidebar user prop:", user);
   let navItems: NavItem[] = [];
   switch (role) {
     case "admin":

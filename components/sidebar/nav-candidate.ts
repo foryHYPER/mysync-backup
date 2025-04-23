@@ -1,8 +1,8 @@
 import { IconDashboard, IconFileAi, IconUser } from "@tabler/icons-react";
 
 export const navCandidate = [
-  { title: "Dashboard", url: "/protected/dashboard", icon: IconDashboard },
-  { title: "Profil", url: "/protected/candidate-profile", icon: IconUser },
+  { title: "Dashboard", url: "/dashboard", icon: IconDashboard },
+  { title: "Profil", url: "/dashboard/candidate-profile", icon: IconUser },
   { title: "Prompts", url: "#", icon: IconFileAi },
   // ...weitere Candidate-Items
 ]; 
