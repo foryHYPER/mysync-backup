@@ -4,7 +4,8 @@ import { ProfileProvider } from '@/context/ProfileProvider';
 import { AppSidebar } from '@/components/app-sidebar';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { SiteHeader } from '@/components/site-header';
-import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbPage } from '@/components/ui/breadcrumb';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
+import DynamicBreadcrumbs from '@/components/dynamic-breadcrumbs';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -41,11 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <SidebarInset>
           <SiteHeader>
             <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Dashboard</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
+              <DynamicBreadcrumbs />
             </Breadcrumb>
           </SiteHeader>
           <div className="flex flex-1 flex-col">

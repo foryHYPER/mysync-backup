@@ -2,10 +2,10 @@
 
 import { useProfile } from "@/context/ProfileContext";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import AccountSection from "@/app/dashboard/candidate-profile/AccountSection";
-import AppearanceSection from "@/app/dashboard/candidate-profile/AppearanceSection";
-import NotificationsSection from "@/app/dashboard/candidate-profile/NotificationsSection";
-import DisplaySection from "@/app/dashboard/candidate-profile/DisplaySection";
+import AccountSection from "./AccountSection";
+import AppearanceSection from "./AppearanceSection";
+import NotificationsSection from "./NotificationsSection";
+import DisplaySection from "./DisplaySection";
 import { useState } from "react";
 
 export default function CandidateProfilePage() {

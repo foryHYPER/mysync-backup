@@ -10,7 +10,7 @@ import { Form, FormItem, FormLabel, FormControl, FormDescription, FormMessage, F
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon } from "lucide-react";
-import SkillTagInput, { Skill } from "@/app/dashboard/candidate-profile/SkillTagInput";
+import SkillTagInput, { Skill } from "./SkillTagInput";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -57,7 +57,7 @@ export default function AccountSection() {
       setDefaultValues({
         first_name: data?.first_name || "",
         last_name: data?.last_name || "",
-        email: data?.email || "",
+        email: user.email || "",
         phone: data?.phone || "",
         resume_url: data?.resume_url || "",
         profile_photo_url: data?.profile_photo_url || "",
@@ -68,7 +68,7 @@ export default function AccountSection() {
       form.reset({
         first_name: data?.first_name || "",
         last_name: data?.last_name || "",
-        email: data?.email || "",
+        email: user.email || "",
         phone: data?.phone || "",
         resume_url: data?.resume_url || "",
         profile_photo_url: data?.profile_photo_url || "",
