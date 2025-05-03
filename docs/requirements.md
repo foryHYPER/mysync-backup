@@ -16,7 +16,7 @@ Kandidaten anlegen & verwalten
 
 Manuelle Erstellung durch Admin oder Self‑Service durch Candidate
 
-Datenimport (z. B. CSV) für Bulk‑Anlage
+Datenimport (z. B. CSV) für Bulk‑Anlage
 
 Kategorisierung & Suchfilter
 
@@ -28,7 +28,7 @@ Matching-Logik
 
 Vorschlagsliste für Companies basierend auf Jobprofilen
 
-Scoring‑System (z. B. Passgenauigkeit in %)
+Scoring‑System (z. B. Passgenauigkeit in %)
 
 3. Company‑Dashboard
 Übersicht & Navigation
@@ -66,7 +66,7 @@ Einladungsansicht
 
 Detailseite mit Terminvorschlägen und Map/Video‑Link
 
-Buttons: „Annehmen“, „Ablehnen“, ggf. „Alternativ­termin vorschlagen“
+Buttons: "Annehmen", "Ablehnen", ggf. "Alternativ­termin vorschlagen"
 
 Self‑Service Funktionen
 
@@ -87,7 +87,7 @@ Optionale Integration mit Google Calendar / Outlook via OAuth
 
 Erinnerungen & Benachrichtigungen
 
-Automatische E‑Mail‑/SMS‑Erinnerung 24 h vor Termin
+Automatische E‑Mail‑/SMS‑Erinnerung 24 h vor Termin
 
 Push‑Notification (falls Mobile‑App geplant)
 
@@ -120,6 +120,12 @@ Kandidaten‑Review / Qualitätskontrolle
 Berichte & Exporte
 
 CSV/Excel‑Export von Kandidaten‑Listen, Einladungsstatistiken, KPIs
+
+**Neu: Lebenslauf-Management**
+- Admins können für jeden Kandidaten einen Lebenslauf einsehen, bearbeiten und als modernen PDF exportieren.
+- Eigene Admin-Route mit Kandidatenliste und Detailansicht für Lebensläufe.
+- PDF-Export mit modernem Layout (Sidebar, Farben, Skills, Profilfoto etc.).
+- Live-Vorschau des PDFs direkt im Frontend (Modal/Overlay).
 
 8. Sicherheit & Compliance
 Datenzugriff
