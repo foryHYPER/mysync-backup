@@ -50,7 +50,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       if (profileError || !profile?.role) throw new Error("Keine Rolle gefunden")
 
       // Rollenbasierte Weiterleitung
-      if (["admin", "client", "candidate"].includes(profile.role)) {
+      if (["admin", "client", "candidate", "company"].includes(profile.role)) {
         router.push("/dashboard")
       } else {
         router.push("/auth/login")
