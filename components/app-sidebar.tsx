@@ -187,7 +187,7 @@ export function AppSidebar({ user, role, ...props }: React.ComponentProps<typeof
             >
               <a href="#">
                 <IconInnerShadowTop className="!size-5" />
-                <span className="text-base font-semibold">Acme Inc.</span>
+                <span className="text-base font-semibold">Dein Unternehmen</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>
