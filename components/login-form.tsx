@@ -50,8 +50,22 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
       if (profileError || !profile?.role) throw new Error("Keine Rolle gefunden")
 
       // Rollenbasierte Weiterleitung
-      if (["admin", "client", "candidate", "company"].includes(profile.role)) {
+      if (["admin", "client", "candidate"].includes(profile.role)) {
         router.push("/dashboard")
+      } else if (profile.role === "company") {
+        // Für Unternehmen prüfen wir den Onboarding-Status
+        const { data: company } = await supabase
+          .from("companies")
+          .select("onboarding_status")
+          .eq("id", user.id)
+          .single()
+
+        if (company?.onboarding_status === "not_started") {
+          router.push("/onboarding")
+        } else {
+          // Unternehmen werden zum Client-Dashboard weitergeleitet
+          router.push("/dashboard/client")
+        }
       } else {
         router.push("/auth/login")
       }

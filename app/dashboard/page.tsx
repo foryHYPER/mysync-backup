@@ -11,6 +11,9 @@ export default function DashboardRouter() {
   useEffect(() => {
     if (!profile.role) {
       router.replace("/auth/login");
+    } else if (profile.role === "company") {
+      // Unternehmen werden zum Client-Dashboard weitergeleitet
+      router.replace("/dashboard/client");
     } else {
       router.replace(`/dashboard/${profile.role}`);
     }

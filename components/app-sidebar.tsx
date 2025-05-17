@@ -158,6 +158,7 @@ type NavItem = {
   title: string;
   url: string;
   icon: Icon;
+  roles?: string[];
 };
 
 export function AppSidebar({ user, role, ...props }: React.ComponentProps<typeof Sidebar> & { user: { name: string, email: string, avatar: string }, role: string }) {
@@ -168,7 +169,8 @@ export function AppSidebar({ user, role, ...props }: React.ComponentProps<typeof
       navItems = navAdmin;
       break;
     case "client":
-      navItems = navClient;
+    case "company":
+      navItems = navClient.filter(item => !item.roles || item.roles.includes(role));
       break;
     case "candidate":
       navItems = navCandidate;

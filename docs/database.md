@@ -113,6 +113,19 @@ CREATE TABLE IF NOT EXISTS candidate_skills (
   PRIMARY KEY (candidate_id, skill_id)
 );
 
+-- 10. candidate_matches: Automatisches Matching zwischen Kandidaten und Stellen
+CREATE TABLE IF NOT EXISTS candidate_matches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  candidate_id UUID NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+  job_posting_id UUID NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
+  match_score DECIMAL(5,2) NOT NULL, -- Score von 0-100
+  match_details JSONB NOT NULL, -- Detaillierte Matching-Informationen
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'contacted', 'rejected')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(candidate_id, job_posting_id)
+);
+
 -- ====================
 -- RLS Policies
 -- ====================
@@ -189,3 +202,24 @@ CREATE POLICY candidate_skills_self_insert ON candidate_skills FOR INSERT WITH C
 CREATE POLICY candidate_skills_self_update ON candidate_skills FOR UPDATE USING (candidate_id = auth.uid()) WITH	CHECK (candidate_id = auth.uid());
 CREATE POLICY candidate_skills_self_delete ON candidate_skills FOR DELETE USING (candidate_id = auth.uid());
 CREATE POLICY candidate_skills_company_select ON candidate_skills FOR SELECT USING (current_setting('jwt.claims.role') = 'company');
+
+-- 11. candidate_matches
+ALTER TABLE candidate_matches ENABLE ROW LEVEL SECURITY;
+CREATE POLICY candidate_matches_admin ON candidate_matches FOR ALL USING (current_setting('jwt.claims.role') = 'admin') WITH CHECK (current_setting('jwt.claims.role') = 'admin');
+CREATE POLICY candidate_matches_company_select ON candidate_matches FOR SELECT USING (current_setting('jwt.claims.role') = 'company' AND job_posting_id IN (SELECT id FROM job_postings WHERE company_id = auth.uid()));
+CREATE POLICY candidate_matches_candidate_select ON candidate_matches FOR SELECT USING (current_setting('jwt.claims.role') = 'candidate' AND candidate_id = auth.uid());
+CREATE POLICY candidate_matches_company_update ON candidate_matches FOR UPDATE USING (current_setting('jwt.claims.role') = 'company' AND job_posting_id IN (SELECT id FROM job_postings WHERE company_id = auth.uid())) WITH CHECK (current_setting('jwt.claims.role') = 'company' AND job_posting_id IN (SELECT id FROM job_postings WHERE company_id = auth.uid()));
+
+-- Trigger für automatische Aktualisierung des updated_at Timestamps
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_candidate_matches_updated_at
+    BEFORE UPDATE ON candidate_matches
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
