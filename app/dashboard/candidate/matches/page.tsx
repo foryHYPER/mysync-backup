@@ -14,44 +14,122 @@ import { Toaster } from "@/components/ui/sonner";
 import { MockMatchingService } from "@/lib/services/mock-matching";
 import { useProfile } from "@/context/ProfileContext";
 
+// Mock-Daten für Job-Postings
+const mockJobPostings = [
+  {
+    id: "job-1",
+    title: "Senior Frontend Developer",
+    company: "TechCorp GmbH",
+    location: "Berlin",
+    requirements: {
+      requiredSkills: ["JavaScript", "React", "TypeScript"],
+      preferredSkills: ["Node.js", "AWS"],
+      experience: 5
+    }
+  },
+  {
+    id: "job-2",
+    title: "Full Stack Developer",
+    company: "Digital Solutions AG",
+    location: "München",
+    requirements: {
+      requiredSkills: ["Java", "Spring", "SQL"],
+      preferredSkills: ["Docker", "AWS"],
+      experience: 3
+    }
+  },
+  {
+    id: "job-3",
+    title: "DevOps Engineer",
+    company: "Cloud Systems GmbH",
+    location: "Hamburg",
+    requirements: {
+      requiredSkills: ["Python", "Docker", "AWS"],
+      preferredSkills: ["Kubernetes", "Terraform"],
+      experience: 4
+    }
+  },
+  {
+    id: "job-4",
+    title: "Backend Developer",
+    company: "Software Solutions GmbH",
+    location: "Frankfurt",
+    requirements: {
+      requiredSkills: ["Java", "Spring Boot", "PostgreSQL"],
+      preferredSkills: ["Docker", "Kubernetes"],
+      experience: 3
+    }
+  },
+  {
+    id: "job-5",
+    title: "Mobile Developer",
+    company: "AppWorks GmbH",
+    location: "Berlin",
+    requirements: {
+      requiredSkills: ["Swift", "Kotlin", "React Native"],
+      preferredSkills: ["Firebase", "AWS"],
+      experience: 2
+    }
+  }
+];
+
 const PAGE_SIZE = 5;
 
 export default function CandidateMatchesPage() {
-  const { profile } = useProfile();
+  const profile = useProfile();
   const [matches, setMatches] = useState<MatchTableItem[]>([]);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [details, setDetails] = useState<MatchTableItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const matchingService = new MockMatchingService();
+
+  // Erstelle eine neue Instanz des MatchingService
+  const matchingService = useMemo(() => new MockMatchingService(), []);
 
   useEffect(() => {
-    loadMatches();
-  }, [profile?.id]);
+    let isMounted = true;
 
-  const loadMatches = async () => {
-    if (!profile?.id) return;
-    
-    setLoading(true);
-    try {
-      const candidateMatches = await matchingService.getCandidateMatches(profile.id);
-      // Transform matches to table format
-      const tableMatches = candidateMatches.map(match => ({
-        id: match.id,
-        company: "TechCorp GmbH", // This should come from the job posting
-        job_title: "Senior Developer", // This should come from the job posting
-        match_score: match.match_score,
-        match_details: match.match_details,
-        status: match.status,
-      }));
-      setMatches(tableMatches);
-    } catch (error) {
-      console.error("Fehler beim Laden der Matches:", error);
-      setError("Fehler beim Laden der Matches. Bitte versuchen Sie es später erneut.");
+    if (!profile?.id) {
+      return;
     }
-    setLoading(false);
-  };
+
+    (async () => {
+      try {
+        matchingService.initializeProfile(profile.id);
+        const candidateMatches = await matchingService.getCandidateMatches(profile.id);
+        if (!isMounted) return;
+        
+        // Transformiere Matches mit den Mock-Job-Posting-Informationen
+        const tableMatches = candidateMatches.map(match => {
+          const jobInfo = mockJobPostings.find(job => job.id === match.job_posting_id) || {
+            title: "Unbekannte Position",
+            company: "Unbekanntes Unternehmen"
+          };
+
+          return {
+            id: match.id,
+            company: jobInfo.company,
+            job_title: jobInfo.title,
+            match_score: match.match_score,
+            match_details: match.match_details,
+            status: match.status,
+          };
+        });
+
+        setMatches(tableMatches);
+        setLoading(false);
+      } catch (err) {
+        if (!isMounted) return;
+        setError("Fehler beim Laden der Matches");
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profile?.id, matchingService]);
 
   const filtered = useMemo(() =>
     matches.filter(
@@ -80,8 +158,24 @@ export default function CandidateMatchesPage() {
         status as "pending" | "reviewed" | "contacted" | "rejected"
       );
       toast.success("Status erfolgreich aktualisiert");
-      loadMatches(); // Reload matches to get updated status
-      setDetails(null); // Close dialog
+      // Reload matches
+      const candidateMatches = await matchingService.getCandidateMatches(profile.id);
+      const tableMatches = candidateMatches.map(match => {
+        const jobInfo = mockJobPostings.find(job => job.id === match.job_posting_id) || {
+          title: "Unbekannte Position",
+          company: "Unbekanntes Unternehmen"
+        };
+        return {
+          id: match.id,
+          company: jobInfo.company,
+          job_title: jobInfo.title,
+          match_score: match.match_score,
+          match_details: match.match_details,
+          status: match.status,
+        };
+      });
+      setMatches(tableMatches);
+      setDetails(null);
     } catch (error) {
       console.error("Fehler beim Aktualisieren des Status:", error);
       toast.error("Fehler beim Aktualisieren des Status");
@@ -92,12 +186,28 @@ export default function CandidateMatchesPage() {
     setDetails(null);
   };
 
-  if (loading && matches.length === 0) {
-    return <div className="flex items-center justify-center p-8">Lade Matches...</div>;
+  if (!profile?.id) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8">
+        <div>Lade Profil...</div>
+      </div>
+    );
   }
 
-  if (error && matches.length === 0) {
-    return <div className="text-red-600 p-8">{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8">
+        <div>Lade Matches...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8">
+        <div className="text-red-600">{error}</div>
+      </div>
+    );
   }
 
   return (

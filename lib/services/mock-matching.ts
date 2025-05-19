@@ -6,29 +6,16 @@ export class MockMatchingService extends MatchingService {
 
   constructor() {
     super();
-    this.initializeProfile();
   }
 
-  private initializeProfile() {
-    if (typeof window === 'undefined') return;
-
-    try {
-      const profileStr = localStorage.getItem('profile');
-      if (!profileStr) {
-        console.warn('Kein Profil im localStorage gefunden');
-        return;
-      }
-
-      const profile = JSON.parse(profileStr);
-      if (!profile.id || !profile.role) {
-        console.warn('Profil im localStorage ist unvollständig:', profile);
-        return;
-      }
-
-      console.log('Initialisiere Mock-Mapping für:', profile);
-      this.mockData.initializeUserMapping(profile.id, profile.role);
-    } catch (error) {
-      console.error('Fehler beim Initialisieren des Profils:', error);
+  // Public Methode zur Initialisierung des Profils
+  public initializeProfile(userId: string) {
+    // Wenn noch kein Mapping existiert, erstelle eines
+    if (!this.mockData.hasUserMapping(userId)) {
+      // Wähle einen zufälligen Mock-Kandidaten
+      const mockCandidates = this.mockData.getMockCandidates();
+      const randomCandidate = mockCandidates[Math.floor(Math.random() * mockCandidates.length)];
+      this.mockData.addUserMapping(userId, randomCandidate.id);
     }
   }
 

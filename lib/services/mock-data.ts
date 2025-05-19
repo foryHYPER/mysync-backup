@@ -199,11 +199,24 @@ export class MockDataService {
 
   private constructor() {}
 
-  static getInstance(): MockDataService {
+  public static getInstance(): MockDataService {
     if (!MockDataService.instance) {
       MockDataService.instance = new MockDataService();
     }
     return MockDataService.instance;
+  }
+
+  // Benutzer-Mapping Methoden
+  public hasUserMapping(userId: string): boolean {
+    return this.userMappings.has(userId);
+  }
+
+  public getMockCandidates() {
+    return this.candidates;
+  }
+
+  public addUserMapping(userId: string, mockCandidateId: string) {
+    this.userMappings.set(userId, mockCandidateId);
   }
 
   // Initialisiere Mapping für einen Benutzer
