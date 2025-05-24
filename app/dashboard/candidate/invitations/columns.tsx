@@ -11,7 +11,8 @@ export type Invitation = {
   time: string;
   location: string;
   status: string;
-  actions: string[];
+  message?: string;
+  actions?: string[];
 };
 
 export function getColumns(
@@ -55,16 +56,13 @@ export function getColumns(
         const invitation = row.original;
         return (
           <div className="space-x-2">
-            {invitation.actions.includes("accept") && (
-              <Button size="sm" variant="default" onClick={() => onAccept(invitation)}>Annehmen</Button>
-            )}
-            {invitation.actions.includes("decline") && (
-              <Button size="sm" variant="destructive" onClick={() => onDecline(invitation)}>Ablehnen</Button>
-            )}
-            {invitation.actions.includes("suggest") && (
-              <Button size="sm" variant="outline" onClick={() => onShowSuggest(invitation)}>Alternativtermin</Button>
-            )}
-            {invitation.actions.includes("view") && (
+            {invitation.status === "pending" ? (
+              <>
+                <Button size="sm" variant="default" onClick={() => onAccept(invitation)}>Annehmen</Button>
+                <Button size="sm" variant="destructive" onClick={() => onDecline(invitation)}>Ablehnen</Button>
+                <Button size="sm" variant="outline" onClick={() => onShowSuggest(invitation)}>Alternativtermin</Button>
+              </>
+            ) : (
               <Button size="sm" variant="outline" onClick={() => onShowDetails(invitation)}>Details</Button>
             )}
           </div>

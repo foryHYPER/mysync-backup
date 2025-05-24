@@ -21,10 +21,10 @@ export default function CandidateProfilePage() {
           <div className="px-4 lg:px-6">
             <Tabs value={tab} onValueChange={setTab} className="w-full">
               <TabsList className="mb-4">
-                <TabsTrigger value="account">Account</TabsTrigger>
-                <TabsTrigger value="appearance">Appearance</TabsTrigger>
-                <TabsTrigger value="notifications">Notifications</TabsTrigger>
-                <TabsTrigger value="display">Display</TabsTrigger>
+                <TabsTrigger value="account">Konto</TabsTrigger>
+                <TabsTrigger value="appearance">Darstellung</TabsTrigger>
+                <TabsTrigger value="notifications">Benachrichtigungen</TabsTrigger>
+                <TabsTrigger value="display">Anzeige</TabsTrigger>
               </TabsList>
               <TabsContent value="account">
                 <AccountSection />

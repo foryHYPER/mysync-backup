@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { CandidateMatch, MatchDetails } from "@/lib/services/matching";
-import { MockMatchingService } from "@/lib/services/mock-matching";
+import { MatchingService } from "@/lib/services/matching";
 import {
   Table,
   TableBody,
@@ -34,7 +34,7 @@ export default function MatchList({ type, id, onStatusChange }: MatchListProps) 
   const [candidates, setCandidates] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const matchingService = new MockMatchingService();
+  const matchingService = new MatchingService();
 
   useEffect(() => {
     loadMatches();

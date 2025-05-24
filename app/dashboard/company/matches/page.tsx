@@ -5,7 +5,8 @@ import { useProfile } from "@/context/ProfileContext";
 import MatchList from "@/components/matching/MatchList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MockMatchingService } from "@/lib/services/mock-matching";
+import { createClient } from "@/lib/supabase/client";
+import { MatchingService } from "@/lib/services/matching";
 import { toast, Toaster } from "sonner";
 import {
   Select,
@@ -14,13 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function CompanyMatchesPage() {
   const profile = useProfile();
-  const [loading, setLoading] = useState(false);
-  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedJobId, setSelectedJobId] = useState<string>("");
   const [jobPostings, setJobPostings] = useState<{ id: string; title: string }[]>([]);
-  const matchingService = new MockMatchingService();
+  const [error, setError] = useState<string | null>(null);
+  const matchingService = new MatchingService();
 
   useEffect(() => {
     loadJobPostings();

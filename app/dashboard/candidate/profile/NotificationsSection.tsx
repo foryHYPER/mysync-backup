@@ -43,7 +43,7 @@ export default function NotificationsSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Notifications</CardTitle>
+        <CardTitle>Benachrichtigungen</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>

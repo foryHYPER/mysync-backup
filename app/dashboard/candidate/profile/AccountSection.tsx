@@ -137,7 +137,7 @@ export default function AccountSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Account</CardTitle>
+        <CardTitle>Konto</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>

@@ -1,360 +1,259 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { getColumns, MatchTableItem } from "./columns";
-import { DataTable } from "@/components/data-table";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { toast } from "sonner";
-import { Toaster } from "@/components/ui/sonner";
-import { MockMatchingService } from "@/lib/services/mock-matching";
+import { Button } from "@/components/ui/button";
+import { CandidateMatch } from "@/lib/services/matching";
+import { MatchingService } from "@/lib/services/matching";
+import { createClient } from "@/lib/supabase/client";
+import { FileText, MapPin, Building2, DollarSign, Calendar, Briefcase } from "lucide-react";
 import { useProfile } from "@/context/ProfileContext";
-
-// Mock-Daten für Job-Postings
-const mockJobPostings = [
-  {
-    id: "job-1",
-    title: "Senior Frontend Developer",
-    company: "TechCorp GmbH",
-    location: "Berlin",
-    requirements: {
-      requiredSkills: ["JavaScript", "React", "TypeScript"],
-      preferredSkills: ["Node.js", "AWS"],
-      experience: 5
-    }
-  },
-  {
-    id: "job-2",
-    title: "Full Stack Developer",
-    company: "Digital Solutions AG",
-    location: "München",
-    requirements: {
-      requiredSkills: ["Java", "Spring", "SQL"],
-      preferredSkills: ["Docker", "AWS"],
-      experience: 3
-    }
-  },
-  {
-    id: "job-3",
-    title: "DevOps Engineer",
-    company: "Cloud Systems GmbH",
-    location: "Hamburg",
-    requirements: {
-      requiredSkills: ["Python", "Docker", "AWS"],
-      preferredSkills: ["Kubernetes", "Terraform"],
-      experience: 4
-    }
-  },
-  {
-    id: "job-4",
-    title: "Backend Developer",
-    company: "Software Solutions GmbH",
-    location: "Frankfurt",
-    requirements: {
-      requiredSkills: ["Java", "Spring Boot", "PostgreSQL"],
-      preferredSkills: ["Docker", "Kubernetes"],
-      experience: 3
-    }
-  },
-  {
-    id: "job-5",
-    title: "Mobile Developer",
-    company: "AppWorks GmbH",
-    location: "Berlin",
-    requirements: {
-      requiredSkills: ["Swift", "Kotlin", "React Native"],
-      preferredSkills: ["Firebase", "AWS"],
-      experience: 2
-    }
-  }
-];
-
-const PAGE_SIZE = 5;
+import { format } from "date-fns";
+import { de } from "date-fns/locale";
+import { useMemo } from "react";
 
 export default function CandidateMatchesPage() {
   const profile = useProfile();
-  const [matches, setMatches] = useState<MatchTableItem[]>([]);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const [details, setDetails] = useState<MatchTableItem | null>(null);
+  const [matches, setMatches] = useState<CandidateMatch[]>([]);
+  const [jobPostings, setJobPostings] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Erstelle eine neue Instanz des MatchingService
-  const matchingService = useMemo(() => new MockMatchingService(), []);
+  const [selectedMatch, setSelectedMatch] = useState<CandidateMatch | null>(null);
+  const matchingService = useMemo(() => new MatchingService(), []);
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
-    let isMounted = true;
+    loadMatches();
+  }, [profile]);
 
-    if (!profile?.id) {
-      return;
-    }
+  const loadMatches = async () => {
+    if (!profile?.id) return;
 
-    (async () => {
-      try {
-        matchingService.initializeProfile(profile.id);
-        const candidateMatches = await matchingService.getCandidateMatches(profile.id);
-        if (!isMounted) return;
+    setLoading(true);
+    setError(null);
+    try {
+      console.log("Lade Matches für Kandidat:", profile.id);
+      const candidateMatches = await matchingService.getCandidateMatches(profile.id);
+      console.log("Geladene Matches:", candidateMatches);
+      setMatches(candidateMatches);
+
+      // Lade Job-Posting-Informationen für alle Matches
+      const jobIds = candidateMatches.map(m => m.job_posting_id);
+      if (jobIds.length > 0) {
+        const { data: jobs } = await supabase
+          .from("job_postings")
+          .select(`
+            *,
+            companies(name, logo)
+          `)
+          .in("id", jobIds);
         
-        // Transformiere Matches mit den Mock-Job-Posting-Informationen
-        const tableMatches = candidateMatches.map(match => {
-          const jobInfo = mockJobPostings.find(job => job.id === match.job_posting_id) || {
-            title: "Unbekannte Position",
-            company: "Unbekanntes Unternehmen"
-          };
-
-          return {
-            id: match.id,
-            company: jobInfo.company,
-            job_title: jobInfo.title,
-            match_score: match.match_score,
-            match_details: match.match_details,
-            status: match.status,
-          };
-        });
-
-        setMatches(tableMatches);
-        setLoading(false);
-      } catch (err) {
-        if (!isMounted) return;
-        setError("Fehler beim Laden der Matches");
-        setLoading(false);
+        if (jobs) {
+          const jobMap = jobs.reduce((acc, job) => {
+            acc[job.id] = job;
+            return acc;
+          }, {} as Record<string, any>);
+          setJobPostings(jobMap);
+        }
       }
-    })();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [profile?.id, matchingService]);
-
-  const filtered = useMemo(() =>
-    matches.filter(
-      (match) =>
-        match.company.toLowerCase().includes(search.toLowerCase()) ||
-        match.job_title.toLowerCase().includes(search.toLowerCase())
-    ),
-    [search, matches]
-  );
-
-  const paged = useMemo(() =>
-    filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [filtered, page]
-  );
-
-  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
-
-  const handleShowDetails = (match: MatchTableItem) => {
-    setDetails(match);
+    } catch (error) {
+      console.error("Fehler beim Laden der Matches:", error);
+      setError("Fehler beim Laden der Matches. Bitte versuchen Sie es später erneut.");
+    }
+    setLoading(false);
   };
 
-  const handleUpdateStatus = async (matchId: string, status: string) => {
+  const handleStatusChange = async (matchId: string, status: string) => {
     try {
       await matchingService.updateMatchStatus(
         matchId,
         status as "pending" | "reviewed" | "contacted" | "rejected"
       );
-      toast.success("Status erfolgreich aktualisiert");
-      // Reload matches
-      const candidateMatches = await matchingService.getCandidateMatches(profile.id);
-      const tableMatches = candidateMatches.map(match => {
-        const jobInfo = mockJobPostings.find(job => job.id === match.job_posting_id) || {
-          title: "Unbekannte Position",
-          company: "Unbekanntes Unternehmen"
-        };
-        return {
-          id: match.id,
-          company: jobInfo.company,
-          job_title: jobInfo.title,
-          match_score: match.match_score,
-          match_details: match.match_details,
-          status: match.status,
-        };
-      });
-      setMatches(tableMatches);
-      setDetails(null);
+      loadMatches(); // Aktualisiere die Liste
     } catch (error) {
       console.error("Fehler beim Aktualisieren des Status:", error);
-      toast.error("Fehler beim Aktualisieren des Status");
     }
   };
 
-  const handleDialogClose = () => {
-    setDetails(null);
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending": return "bg-yellow-500";
+      case "reviewed": return "bg-blue-500";
+      case "contacted": return "bg-green-500";
+      case "rejected": return "bg-red-500";
+      default: return "bg-gray-500";
+    }
   };
 
-  if (!profile?.id) {
-    return (
-      <div className="flex flex-col items-center justify-center p-8">
-        <div>Lade Profil...</div>
-      </div>
-    );
-  }
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "pending": return "Ausstehend";
+      case "reviewed": return "Geprüft";
+      case "contacted": return "Kontaktiert";
+      case "rejected": return "Abgelehnt";
+      default: return status;
+    }
+  };
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-8">
-        <div>Lade Matches...</div>
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="mb-2">Lade Matches...</div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center p-8">
-        <div className="text-red-600">{error}</div>
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center text-red-500">
+          <div className="mb-2">{error}</div>
+          <Button variant="outline" onClick={loadMatches}>
+            Erneut versuchen
+          </Button>
+        </div>
       </div>
     );
   }
 
+  if (matches.length === 0) {
+    return (
+      <div className="container mx-auto py-8">
+        <Card className="text-center py-12">
+          <CardContent>
+            <Briefcase className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Keine Matches gefunden</h3>
+            <p className="text-muted-foreground">
+              Aktuell gibt es keine passenden Stellenangebote für Ihr Profil.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Transformiere Matches mit den Job-Posting-Informationen
+  const enrichedMatches = matches.map(match => {
+    const jobInfo = jobPostings[match.job_posting_id] || {
+      title: "Stelle wird geladen...",
+      description: "",
+      company: { name: "Unbekannt" },
+      location: "Unbekannt",
+      salary_range: "Nicht angegeben",
+      requirements: {}
+    };
+
+    return {
+      ...match,
+      jobInfo
+    };
+  });
+
   return (
-    <div className="flex flex-1 flex-col">
-      <Toaster />
-      <div className="@container/main flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-          <div className="px-4 lg:px-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Passende Stellen</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-4 flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
-                  <Input
-                    placeholder="Suche nach Unternehmen oder Position..."
-                    value={search}
-                    onChange={e => {
-                      setSearch(e.target.value);
-                      setPage(0);
-                    }}
-                    className="max-w-xs"
-                  />
-                </div>
-                <DataTable 
-                  columns={getColumns(handleShowDetails, handleUpdateStatus)} 
-                  data={paged} 
-                />
-              </CardContent>
-              <CardFooter className="flex justify-between items-center mt-4">
-                <span>
-                  Seite {page + 1} von {pageCount || 1}
-                </span>
-                <div className="space-x-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                  >
-                    Zurück
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
-                    disabled={page >= pageCount - 1}
-                  >
-                    Weiter
-                  </Button>
-                </div>
-              </CardFooter>
-            </Card>
-          </div>
-        </div>
+    <div className="container mx-auto py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Ihre Job-Matches</h1>
+        <p className="text-muted-foreground">
+          Basierend auf Ihrem Profil haben wir {matches.length} passende Stellen gefunden.
+        </p>
       </div>
 
-      <Dialog open={!!details} onOpenChange={open => { if (!open) handleDialogClose(); }}>
-        <DialogContent className="transition-all duration-300">
-          <DialogHeader>
-            <DialogTitle>Match Details</DialogTitle>
-            <DialogDescription>
-              Detaillierte Informationen zum Match.
-            </DialogDescription>
-          </DialogHeader>
-          {details && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="font-semibold">Unternehmen</div>
-                  <div>{details.company}</div>
-                </div>
-                <div>
-                  <div className="font-semibold">Position</div>
-                  <div>{details.job_title}</div>
-                </div>
-                <div>
-                  <div className="font-semibold">Match Score</div>
-                  <div className="flex items-center gap-2">
-                    <Progress value={details.match_score} className="w-[100px]" />
-                    <span>{Math.round(details.match_score)}%</span>
-                  </div>
-                </div>
-                <div>
-                  <div className="font-semibold">Status</div>
-                  <Badge className={details.status === "pending" ? "bg-yellow-500" : 
-                    details.status === "reviewed" ? "bg-blue-500" :
-                    details.status === "contacted" ? "bg-green-500" : "bg-red-500"}>
-                    {details.status.charAt(0).toUpperCase() + details.status.slice(1)}
-                  </Badge>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="font-semibold">Match Details</div>
-                <div className="space-y-2">
-                  <div>
-                    <div className="text-sm font-medium">Skills</div>
-                    <Progress value={details.match_details.skillMatches.reduce((acc, m) => acc + m.score, 0) / details.match_details.skillMatches.length} />
-                    <div className="text-sm text-gray-500 mt-1">
-                      {details.match_details.skillMatches.map(m => `${m.skill} (${Math.round(m.score)}%)`).join(", ")}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {enrichedMatches.map((match) => {
+          const jobInfo = match.jobInfo;
+          
+          return (
+            <Card key={match.id} className="hover:shadow-lg transition-shadow cursor-pointer"
+                  onClick={() => setSelectedMatch(match)}>
+              <CardHeader>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg">{jobInfo.title}</CardTitle>
+                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                      <Building2 className="h-4 w-4" />
+                      <span>{jobInfo.companies?.name || "Unbekannt"}</span>
                     </div>
                   </div>
-                  <div>
-                    <div className="text-sm font-medium">Erfahrung</div>
-                    <Progress value={details.match_details.experienceMatch} />
-                  </div>
+                  <Badge className={`${getStatusColor(match.status)} text-white`}>
+                    {getStatusText(match.status)}
+                  </Badge>
+                </div>
+                
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="text-sm font-medium">Standort</div>
-                    <Badge variant={details.match_details.locationMatch ? "default" : "destructive"}>
-                      {details.match_details.locationMatch ? "Match" : "Kein Match"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-sm font-medium">Verfügbarkeit</div>
-                    <Badge variant={details.match_details.availabilityMatch ? "default" : "destructive"}>
-                      {details.match_details.availabilityMatch ? "Match" : "Kein Match"}
-                    </Badge>
+                    <Progress value={match.match_score} className="w-24" />
+                    <span className="text-sm font-semibold">{Math.round(match.match_score)}%</span>
                   </div>
                 </div>
-              </div>
+              </CardHeader>
+              
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span>{jobInfo.location || "Remote"}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    <span>{jobInfo.salary_range || "Nicht angegeben"}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span>Erstellt: {format(new Date(match.created_at), "dd. MMM yyyy", { locale: de })}</span>
+                  </div>
+                </div>
 
-              {details.status === "pending" && (
-                <div className="flex gap-2 pt-2">
+                <div className="mt-4 space-y-2">
+                  <div className="text-xs font-semibold text-muted-foreground">Match-Details:</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>Skills: {match.match_details.skillMatches.filter(s => s.match).length}/{match.match_details.skillMatches.length}</div>
+                    <div>Erfahrung: {Math.round(match.match_details.experienceMatch)}%</div>
+                    <div>Standort: {match.match_details.locationMatch ? "✓" : "✗"}</div>
+                    <div>Verfügbar: {match.match_details.availabilityMatch ? "✓" : "✗"}</div>
+                  </div>
+                </div>
+
+                {jobInfo.description && (
+                  <div className="mt-4">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {jobInfo.description}
+                    </p>
+                  </div>
+                )}
+
+                <div className="mt-4 flex gap-2">
                   <Button 
                     size="sm" 
-                    variant="default" 
-                    onClick={() => handleUpdateStatus(details.id, "reviewed")}
+                    className="flex-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Hier könnte eine Bewerbungsfunktion implementiert werden
+                    }}
                   >
-                    Als geprüft markieren
+                    Bewerben
                   </Button>
                   <Button 
                     size="sm" 
-                    variant="destructive" 
-                    onClick={() => handleUpdateStatus(details.id, "rejected")}
+                    variant="outline"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStatusChange(match.id, "rejected");
+                    }}
                   >
                     Ablehnen
                   </Button>
                 </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={handleDialogClose}>Schließen</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
     </div>
   );
 } 

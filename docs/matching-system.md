@@ -1,98 +1,95 @@
-# Matching-System Dokumentation
+# Matching-System
 
-## Übersicht
-Das Matching-System ist ein zentraler Bestandteil der Plattform, der Kandidaten mit passenden Stellen und Unternehmen mit passenden Kandidaten zusammenbringt. Das System verwendet einen Mock-Service für Entwicklungs- und Testzwecke, der realistische Daten simuliert.
+Das Matching-System von mySync ist eine intelligente Komponente, die Kandidaten und Stellenausschreibungen basierend auf verschiedenen Kriterien zusammenbringt. Das System verwendet einen gewichteten Algorithmus zur Berechnung von Match-Scores.
 
 ## Architektur
 
-### 1. Service-Schicht
+### Service-Layer
 
-#### MatchingService (Basis-Service)
-- Basisklasse für das Matching-System
-- Definiert die Schnittstelle für alle Matching-Operationen
-- Implementiert die grundlegende Logik für das Matching
+#### MatchingService
+- Hauptklasse für alle Matching-Operationen
+- Verwendet Supabase für Datenbankzugriff
+- Implementiert intelligentes Matching basierend auf Skills, Erfahrung, Standort und Verfügbarkeit
 
-#### MockMatchingService
-- Erweitert den MatchingService für Testzwecke
-- Verwendet MockDataService für simulierte Daten
-- Implementiert künstliche Verzögerungen für realistischeres Verhalten
-- Initialisiert automatisch Benutzer-Mappings beim Login
+### Datenmodelle
 
-#### MockDataService
-- Singleton-Instanz für Mock-Daten
-- Verwaltet Mock-Daten für:
-  - Kandidaten
-  - Stellenausschreibungen
-  - Matches
-  - Skills
-- Implementiert Benutzer-Mapping-System für die Verknüpfung von echten Benutzer-IDs mit Mock-Daten
+- **CandidateMatch**: Hauptentität für Match-Ergebnisse
+- **MatchDetails**: Detaillierte Aufschlüsselung der Match-Scores
+- **SkillMatch**: Einzelne Skill-Vergleiche
 
-### 2. Datenmodelle
+## Matching-Algorithmus
 
-#### CandidateMatch
+Der Matching-Score wird basierend auf folgenden Kriterien berechnet:
+
+1. **Skills (60% Gewichtung)**
+   - Erforderliche Skills müssen übereinstimmen
+   - Bevorzugte Skills erhöhen den Score
+
+2. **Erfahrung (20% Gewichtung)**
+   - Vergleicht die Kandidaten-Erfahrung mit den Anforderungen
+
+3. **Standort (10% Gewichtung)**
+   - Prüft Übereinstimmung zwischen Kandidaten- und Job-Standort
+
+4. **Verfügbarkeit (10% Gewichtung)**
+   - Berücksichtigt die Verfügbarkeit des Kandidaten
+
+## Datenbank-Integration
+
+### Tabellen
+- `candidates`: Kandidateninformationen
+- `job_postings`: Stellenausschreibungen
+- `candidate_matches`: Gespeicherte Match-Ergebnisse
+- `skills` & `candidate_skills`: Skill-Management
+
+### Abfragen
+Das System nutzt effiziente Supabase-Abfragen mit Joins für optimale Performance.
+
+## API-Endpunkte
+
+### Kandidaten-Matching
 ```typescript
-{
-  id: string;
-  candidate_id: string;
-  job_posting_id: string;
-  match_score: number;
-  match_details: MatchDetails;
-  status: "pending" | "reviewed" | "contacted" | "rejected";
-  created_at: string;
-  updated_at: string;
-}
+matchingService.matchCandidate(candidateId: string): Promise<CandidateMatch[]>
 ```
 
-#### MatchDetails
+### Job-Posting-Matching
 ```typescript
-{
-  skillMatches: Array<{
-    skill: string;
-    score: number;
-  }>;
-  experienceMatch: number;
-  locationMatch: boolean;
-  availabilityMatch: boolean;
-}
+matchingService.matchJobPosting(jobPostingId: string): Promise<CandidateMatch[]>
 ```
 
-## Funktionsweise
+### Match-Status-Update
+```typescript
+matchingService.updateMatchStatus(matchId: string, status: string): Promise<CandidateMatch>
+```
 
-### 1. Benutzer-Mapping
-- Beim Login wird ein Mapping zwischen der echten Benutzer-ID und Mock-Daten erstellt
-- Für Kandidaten: Zufällige Zuordnung zu einem Mock-Kandidaten
-- Für Unternehmen: Alle Stellenausschreibungen werden mit der Unternehmens-ID verknüpft
+## Verwendung
 
-### 2. Match-Prozess
+### In React-Komponenten
+```typescript
+import { MatchingService } from "@/lib/services/matching";
 
-#### Für Kandidaten
-1. Kandidat meldet sich an
-2. System lädt alle verfügbaren Stellenausschreibungen
-3. Für jede Stelle wird ein Match-Score berechnet basierend auf:
-   - Skill-Übereinstimmung
-   - Erfahrungslevel
-   - Standort-Kompatibilität
-   - Verfügbarkeit
+const matchingService = new MatchingService();
+const matches = await matchingService.getCandidateMatches(candidateId);
+```
 
-#### Für Unternehmen
-1. Unternehmen meldet sich an
-2. System lädt alle offenen Stellenausschreibungen des Unternehmens
-3. Für jede Stelle werden passende Kandidaten gefunden
-4. Match-Scores werden berechnet und sortiert
-
-### 3. Match-Score Berechnung
-Der Match-Score wird aus mehreren Faktoren berechnet:
-- Skills (50%): Durchschnittliche Übereinstimmung der Skills
-- Erfahrung (30%): Übereinstimmung des Erfahrungslevels
-- Standort (10%): Binärer Faktor für Standort-Kompatibilität
-- Verfügbarkeit (10%): Binärer Faktor für Verfügbarkeits-Kompatibilität
-
-### 4. Match-Status-Management
-Matches können folgende Status haben:
-- `pending`: Initialer Status
-- `reviewed`: Match wurde geprüft
-- `contacted`: Kontakt wurde aufgenommen
+### Status-Management
+- `pending`: Neuer Match, noch nicht überprüft
+- `reviewed`: Match wurde vom Unternehmen angesehen
+- `contacted`: Kandidat wurde kontaktiert
 - `rejected`: Match wurde abgelehnt
+
+## Best Practices
+
+1. **Caching**: Match-Ergebnisse werden in der Datenbank gespeichert
+2. **Incremental Updates**: Nur neue oder geänderte Daten werden neu berechnet
+3. **Error Handling**: Robuste Fehlerbehandlung für Datenbankoperationen
+
+## Erweiterungsmöglichkeiten
+
+- KI-basierte Matching-Verbesserungen
+- Personalisierte Gewichtungen pro Unternehmen
+- Historische Match-Analyse
+- Real-time Match-Benachrichtigungen
 
 ## Frontend-Integration
 

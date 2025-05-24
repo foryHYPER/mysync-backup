@@ -1,23 +1,79 @@
 "use client"
 
+import { useEffect, useState } from "react";
 import { SectionCards } from "@/components/section-cards";
 import { ChartAreaInteractive } from "@/components/chart-area-interactive";
 import { DataTable } from "@/components/data-table";
-import candidateData from "@/app/dashboard/data/candidate.json";
 import { useProfile } from "@/context/ProfileContext";
+import { createClient } from "@/lib/supabase/client";
 import { ColumnDef } from "@tanstack/react-table";
 
 const candidateColumns: ColumnDef<any>[] = [
-  { accessorKey: "header", header: "Bewerbung" },
-  { accessorKey: "type", header: "Typ" },
+  { accessorKey: "company_name", header: "Unternehmen" },
+  { accessorKey: "job_title", header: "Position" },
   { accessorKey: "status", header: "Status" },
-  { accessorKey: "target", header: "Stelle" },
-  { accessorKey: "limit", header: "Frist" },
-  { accessorKey: "reviewer", header: "Bearbeiter" },
+  { accessorKey: "match_score", header: "Match %" },
+  { accessorKey: "created_at", header: "Erstellt am" },
+  { accessorKey: "location", header: "Standort" },
 ];
 
 export default function CandidateDashboard() {
   const profile = useProfile();
+  const [applications, setApplications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!profile?.id) return;
+
+      try {
+        // Lade die Matches/Bewerbungen des Kandidaten
+        const { data: matches } = await supabase
+          .from("candidate_matches")
+          .select(`
+            *,
+            job_postings(
+              title,
+              location,
+              companies(name)
+            )
+          `)
+          .eq("candidate_id", profile.id)
+          .order("created_at", { ascending: false });
+
+        if (matches) {
+          const formattedData = matches.map((match: any) => ({
+            id: match.id,
+            company_name: match.job_postings?.companies?.name || "Unbekannt",
+            job_title: match.job_postings?.title || "Unbekannte Position",
+            status: getStatusText(match.status),
+            match_score: `${Math.round(match.match_score)}%`,
+            created_at: new Date(match.created_at).toLocaleDateString("de-DE"),
+            location: match.job_postings?.location || "Remote"
+          }));
+          setApplications(formattedData);
+        }
+      } catch (error) {
+        console.error("Fehler beim Laden der Daten:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [profile, supabase]);
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "pending": return "Ausstehend";
+      case "reviewed": return "Geprüft";
+      case "contacted": return "Kontaktiert";
+      case "rejected": return "Abgelehnt";
+      default: return status;
+    }
+  };
+
   const userObj = {
     name: profile.name || profile.email || profile.user_email || "Unbekannt",
     email: profile.email || profile.user_email || "Unbekannt",
@@ -32,7 +88,10 @@ export default function CandidateDashboard() {
           <div className="px-4 lg:px-6">
             <ChartAreaInteractive />
           </div>
-          <DataTable columns={candidateColumns} data={candidateData.table} />
+          <DataTable 
+            columns={candidateColumns} 
+            data={loading ? [] : applications} 
+          />
         </div>
       </div>
     </div>

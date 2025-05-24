@@ -1,6 +1,0 @@
-{
-  "table": [
-    { "header": "Bewerbung 1", "id": 1, "type": "Vollzeit", "status": "Bewerbung eingereicht", "target": "Stelle A", "limit": "2024-07-01", "reviewer": "Max Mustermann" },
-    { "header": "Bewerbung 2", "id": 2, "type": "Teilzeit", "status": "Interview geplant", "target": "Stelle B", "limit": "2024-07-10", "reviewer": "Erika Musterfrau" }
-  ]
-} 

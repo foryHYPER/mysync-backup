@@ -17,6 +17,12 @@ CREATE TABLE IF NOT EXISTS companies (
   address TEXT,
   contact_name TEXT,
   contact_email TEXT,
+  contact_phone TEXT,
+  logo TEXT,
+  onboarding_status TEXT DEFAULT 'not_started' CHECK (onboarding_status IN ('not_started','in_progress','completed')),
+  onboarding_steps JSONB DEFAULT '{}',
+  onboarding_progress INTEGER DEFAULT 0,
+  onboarding_completed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -31,7 +37,9 @@ CREATE TABLE IF NOT EXISTS candidates (
   resume_url TEXT,
   profile_photo_url TEXT,
   skills JSONB,
-  availability JSONB,
+  availability TEXT,
+  location TEXT,
+  experience INTEGER DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

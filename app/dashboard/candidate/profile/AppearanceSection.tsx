@@ -40,7 +40,7 @@ export default function AppearanceSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Appearance</CardTitle>
+        <CardTitle>Darstellung</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>

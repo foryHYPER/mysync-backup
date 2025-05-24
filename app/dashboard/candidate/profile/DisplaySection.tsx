@@ -41,7 +41,7 @@ export default function DisplaySection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Display</CardTitle>
+        <CardTitle>Anzeige</CardTitle>
       </CardHeader>
       <CardContent>
         <Form {...form}>

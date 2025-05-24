@@ -277,12 +277,40 @@ export class MatchingService {
 
   // Holt alle offenen Stellen eines Unternehmens
   async getCompanyJobPostings(companyId: string): Promise<{ id: string; title: string }[]> {
-    const { data: jobs } = await this.supabase
+    const { data } = await this.supabase
       .from("job_postings")
       .select("id, title")
       .eq("company_id", companyId)
       .eq("status", "open");
 
-    return jobs || [];
+    return data || [];
+  }
+
+  // Holt Kandidaten-Informationen
+  async getCandidate(candidateId: string): Promise<any | null> {
+    const { data, error } = await this.supabase
+      .from("candidates")
+      .select(`
+        *,
+        candidate_skills(
+          skill_id,
+          level,
+          skills(name)
+        )
+      `)
+      .eq("id", candidateId)
+      .single();
+
+    if (error || !data) return null;
+    
+    return {
+      id: data.id,
+      name: `${data.first_name} ${data.last_name}`,
+      email: data.email,
+      experience: data.experience || 0,
+      skills: data.candidate_skills?.map((cs: any) => cs.skills.name) || [],
+      location: data.location || "",
+      availability: data.availability || ""
+    };
   }
 } 
