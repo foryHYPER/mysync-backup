@@ -1,17 +1,70 @@
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import { readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+
+// Load .env.local file if it exists
+const envPath = join(process.cwd(), '.env.local');
+if (existsSync(envPath)) {
+  const envContent = readFileSync(envPath, 'utf-8');
+  envContent.split('\n').forEach(line => {
+    const trimmedLine = line.trim();
+    if (trimmedLine && !trimmedLine.startsWith('#')) {
+      const [key, ...valueParts] = trimmedLine.split('=');
+      const value = valueParts.join('=').trim();
+      if (key && value) {
+        process.env[key.trim()] = value.replace(/^["']|["']$/g, '');
+      }
+    }
+  });
+  console.log('\x1b[36m✓ Loaded environment variables from .env.local\x1b[0m');
+}
+
+// Check for required environment variables
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('\x1b[31m❌ Missing required environment variables!\x1b[0m\n');
+  console.log('Please create a .env.local file in the root directory with:');
+  console.log('\x1b[36m');
+  console.log('NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co');
+  console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here');
+  console.log('SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here (optional but recommended)');
+  console.log('\x1b[0m');
+  console.log('\nGet these values from your Supabase project:');
+  console.log('https://app.supabase.com/project/_/settings/api\n');
+  process.exit(1);
+}
 
 // Supabase Admin Client mit Service Role Key für volle Berechtigungen
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  SUPABASE_URL,
+  SUPABASE_KEY,
   {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    db: {
+      schema: 'public'
+    },
+    global: {
+      headers: {
+        // Bypass RLS when using service role key
+        ...(process.env.SUPABASE_SERVICE_ROLE_KEY ? { 'Prefer': 'return=minimal' } : {})
+      }
     }
   }
 );
+
+// Log which key we're using
+if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.log('\x1b[32m✓ Using Service Role Key (RLS bypassed)\x1b[0m\n');
+} else {
+  console.log('\x1b[33m⚠ Using Anon Key (RLS policies apply)\x1b[0m');
+  console.log('\x1b[33m  For best results, add SUPABASE_SERVICE_ROLE_KEY to .env.local\x1b[0m\n');
+}
 
 // Farbige Console-Ausgaben
 const log = {
@@ -147,31 +200,83 @@ async function cleanDatabase() {
   ];
 
   for (const table of tables) {
-    const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    if (error) log.warn(`Fehler beim Bereinigen von ${table}: ${error.message}`);
+    // Use a simple delete all for most tables
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .gte('created_at', '2000-01-01'); // This ensures we delete all rows
+      
+    if (error) {
+      log.warn(`Fehler beim Bereinigen von ${table}: ${error.message}`);
+    }
+  }
+  
+  // Optionally clean auth users (careful with this!)
+  const args = process.argv.slice(2);
+  if (args.includes('--clean-auth')) {
+    log.warn('Lösche auch Auth-Benutzer...');
+    const { data: users } = await supabase.auth.admin.listUsers();
+    
+    if (users?.users) {
+      for (const user of users.users) {
+        // Don't delete your own admin user if you're logged in
+        if (user.email !== 'your-admin@email.com') {
+          const { error } = await supabase.auth.admin.deleteUser(user.id);
+          if (error) {
+            log.warn(`Fehler beim Löschen von Auth-User ${user.email}: ${error.message}`);
+          }
+        }
+      }
+    }
   }
   
   log.info('Datenbank bereinigt');
 }
 
 async function createUser(email: string, password: string, role: string) {
-  // Erstelle Auth-User
-  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true
-  });
+  // First check if user already exists
+  const { data: existingUsers } = await supabase.auth.admin.listUsers();
+  const existingUser = existingUsers?.users.find(u => u.email === email);
+  
+  let userId: string;
+  
+  if (existingUser) {
+    // User already exists in Auth
+    userId = existingUser.id;
+    log.warn(`Auth user ${email} already exists, using existing ID`);
+  } else {
+    // Create new Auth user
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
 
-  if (authError) {
-    log.error(`Fehler beim Erstellen von User ${email}: ${authError.message}`);
-    return null;
+    if (authError) {
+      log.error(`Fehler beim Erstellen von User ${email}: ${authError.message}`);
+      return null;
+    }
+    
+    userId = authData.user.id;
   }
 
-  // Erstelle Profil
+  // Check if profile already exists
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', userId)
+    .single();
+    
+  if (existingProfile) {
+    log.warn(`Profile for ${email} already exists`);
+    return userId;
+  }
+
+  // Create profile if it doesn't exist
   const { error: profileError } = await supabase
     .from('profiles')
     .insert({
-      id: authData.user.id,
+      id: userId,
       role
     });
 
@@ -180,7 +285,7 @@ async function createUser(email: string, password: string, role: string) {
     return null;
   }
 
-  return authData.user.id;
+  return userId;
 }
 
 async function seedSkills() {
@@ -205,6 +310,18 @@ async function seedCompanies() {
   for (const company of companies) {
     const userId = await createUser(company.email, company.password, 'company');
     if (!userId) continue;
+
+    // Check if company already exists
+    const { data: existingCompany } = await supabase
+      .from('companies')
+      .select('id')
+      .eq('id', userId)
+      .single();
+      
+    if (existingCompany) {
+      log.warn(`Unternehmen ${company.name} existiert bereits`);
+      continue;
+    }
 
     const { error } = await supabase
       .from('companies')
@@ -234,6 +351,18 @@ async function seedCandidates() {
   for (const candidate of candidates) {
     const userId = await createUser(candidate.email, candidate.password, 'candidate');
     if (!userId) continue;
+
+    // Check if candidate already exists
+    const { data: existingCandidate } = await supabase
+      .from('candidates')
+      .select('id')
+      .eq('id', userId)
+      .single();
+      
+    if (existingCandidate) {
+      log.warn(`Kandidat ${candidate.email} existiert bereits`);
+      continue;
+    }
 
     const { error: candidateError } = await supabase
       .from('candidates')
