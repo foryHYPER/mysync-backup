@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { getColumns, Invitation } from "./columns";
 import { DataTable } from "@/components/data-table";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,16 @@ const statusColor: Record<string, string> = {
   declined: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border border-red-300 dark:border-red-800",
 };
 
+type RawInvitation = {
+  id: string;
+  companies: { name: string; logo: string | null } | null;
+  job_postings: { title: string; location: string | null } | null;
+  proposed_at: string;
+  location: string | null;
+  status: 'pending' | 'accepted' | 'declined';
+  message: string | null;
+};
+
 export default function CandidateInvitationsPage() {
   const profile = useProfile();
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -35,17 +45,13 @@ export default function CandidateInvitationsPage() {
   const [suggestConfirmed, setSuggestConfirmed] = useState(false);
   const supabase = createClient();
 
-  useEffect(() => {
-    loadInvitations();
-  }, [profile]);
-
-  const loadInvitations = async () => {
+  const loadInvitations = useCallback(async () => {
     if (!profile?.id) return;
 
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from("invitations")
         .select(`
           *,
@@ -55,10 +61,10 @@ export default function CandidateInvitationsPage() {
         .eq("candidate_id", profile.id)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
 
       if (data) {
-        const formattedInvitations = data.map((inv: any) => ({
+        const formattedInvitations: Invitation[] = data.map((inv: RawInvitation) => ({
           id: inv.id,
           company: inv.companies?.name || "Unbekannt",
           job_title: inv.job_postings?.title || "Unbekannte Position",
@@ -66,17 +72,21 @@ export default function CandidateInvitationsPage() {
           time: new Date(inv.proposed_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
           location: inv.location || inv.job_postings?.location || "Remote",
           status: inv.status,
-          message: inv.message
+          message: inv.message || undefined
         }));
         setInvitations(formattedInvitations);
       }
-    } catch (error) {
-      console.error("Fehler beim Laden der Einladungen:", error);
+    } catch (err) {
+      console.error("Fehler beim Laden der Einladungen:", err);
       setError("Fehler beim Laden der Einladungen. Bitte versuchen Sie es später erneut.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id, supabase]);
+
+  useEffect(() => {
+    loadInvitations();
+  }, [loadInvitations]);
 
   const filtered = useMemo(() =>
     invitations.filter(
@@ -110,30 +120,36 @@ export default function CandidateInvitationsPage() {
 
   const handleAccept = async (invitation: Invitation) => {
     try {
-      await supabase
+      const { error: updateError } = await supabase
         .from("invitations")
         .update({ status: "accepted" })
         .eq("id", invitation.id);
       
+      if (updateError) throw updateError;
+      
       toast.success("Einladung angenommen.");
       loadInvitations();
       handleDialogClose();
-    } catch (error) {
+    } catch (err) {
+      console.error("Fehler beim Annehmen der Einladung:", err);
       toast.error("Fehler beim Annehmen der Einladung.");
     }
   };
 
   const handleDecline = async (invitation: Invitation) => {
     try {
-      await supabase
+      const { error: updateError } = await supabase
         .from("invitations")
         .update({ status: "declined" })
         .eq("id", invitation.id);
       
+      if (updateError) throw updateError;
+      
       toast.success("Einladung abgelehnt.");
       loadInvitations();
       handleDialogClose();
-    } catch (error) {
+    } catch (err) {
+      console.error("Fehler beim Ablehnen der Einladung:", err);
       toast.error("Fehler beim Ablehnen der Einladung.");
     }
   };
@@ -163,7 +179,8 @@ export default function CandidateInvitationsPage() {
       // oder eine Benachrichtigung an das Unternehmen gesendet werden
       toast.success(`Neuer Terminvorschlag: ${suggestDate} ${suggestTime}`);
       handleDialogClose();
-    } catch (error) {
+    } catch (err) {
+      console.error("Fehler beim Senden des Terminvorschlags:", err);
       toast.error("Fehler beim Senden des Terminvorschlags.");
     }
   };

@@ -6,9 +6,10 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useProfile } from "@/context/ProfileContext";
 import { useRouter } from "next/navigation";
+import { Candidate } from "@/types/candidate";
 
 export default function AdminResumesPage() {
-  const [candidates, setCandidates] = useState<any[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const profile = useProfile();
   const router = useRouter();

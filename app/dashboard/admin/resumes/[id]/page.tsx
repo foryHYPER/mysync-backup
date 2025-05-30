@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, ChangeEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
@@ -8,14 +8,22 @@ import { Input } from "@/components/ui/input";
 import { useProfile } from "@/context/ProfileContext";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import { Candidate } from "@/types/candidate";
+
+type Skill = {
+  id: string;
+  name: string;
+};
+
+type FormData = Partial<Candidate>;
 
 export default function AdminResumeDetailPage() {
   const params = useParams();
   const candidateId = params?.id as string;
-  const [candidate, setCandidate] = useState<any>(null);
+  const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
-  const [form, setForm] = useState<any>({});
+  const [form, setForm] = useState<FormData>({});
   const profile = useProfile();
   const router = useRouter();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -33,22 +41,22 @@ export default function AdminResumeDetailPage() {
       const supabase = createClient();
       const { data, error } = await supabase.from("candidates").select("*").eq("id", candidateId).single();
       if (!error) {
-        setCandidate(data);
-        setForm(data);
+        setCandidate(data as Candidate);
+        setForm(data as FormData);
       }
       setLoading(false);
     };
     if (candidateId) fetchCandidate();
   }, [candidateId]);
 
-  const handleChange = (e: any) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
   const handleSave = async () => {
     const supabase = createClient();
     await supabase.from("candidates").update(form).eq("id", candidateId);
-    setCandidate(form);
+    setCandidate(form as Candidate);
     setEditMode(false);
   };
 
@@ -91,7 +99,7 @@ export default function AdminResumeDetailPage() {
     }
 
     // Main content
-    let mainX = sidebarWidth + margin;
+    const mainX = sidebarWidth + margin;
     let mainY = margin;
 
     // Header
@@ -137,7 +145,7 @@ export default function AdminResumeDetailPage() {
       mainY += 18;
       doc.setFontSize(11);
       doc.setTextColor("#222");
-      const skills = candidate.skills.map((s: any) => s.name || s).join(", ");
+      const skills = candidate.skills.map((s: Skill) => s.name).join(", ");
       doc.text(skills, mainX, mainY);
       mainY += lineHeight;
     }
@@ -179,7 +187,7 @@ export default function AdminResumeDetailPage() {
       doc.text(candidate.phone, sidebarWidth / 2, y, { align: "center" });
       y += lineHeight;
     }
-    let mainX = sidebarWidth + margin;
+    const mainX = sidebarWidth + margin;
     let mainY = margin;
     doc.setFontSize(24);
     doc.setFont("helvetica", "bold");
@@ -219,7 +227,7 @@ export default function AdminResumeDetailPage() {
       mainY += 18;
       doc.setFontSize(11);
       doc.setTextColor("#222");
-      const skills = candidate.skills.map((s: any) => s.name || s).join(", ");
+      const skills = candidate.skills.map((s: Skill) => s.name).join(", ");
       doc.text(skills, mainX, mainY);
       mainY += lineHeight;
     }

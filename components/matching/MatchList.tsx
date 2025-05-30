@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -23,6 +22,21 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Check, X, Eye } from "lucide-react";
 
+interface Candidate {
+  id: string;
+  name: string;
+  experience: number;
+  location?: string;
+  availability?: string;
+  candidate_skills?: Array<{
+    skill_id: string;
+    level: number;
+    skills: {
+      name: string;
+    };
+  }>;
+}
+
 type MatchListProps = {
   type: "candidate" | "job";
   id: string;
@@ -31,16 +45,13 @@ type MatchListProps = {
 
 export default function MatchList({ type, id, onStatusChange }: MatchListProps) {
   const [matches, setMatches] = useState<CandidateMatch[]>([]);
-  const [candidates, setCandidates] = useState<Record<string, any>>({});
+  const [candidates, setCandidates] = useState<Record<string, Candidate>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const matchingService = new MatchingService();
+  
+  const matchingService = useMemo(() => new MatchingService(), []);
 
-  useEffect(() => {
-    loadMatches();
-  }, [id]);
-
-  const loadMatches = async () => {
+  const loadMatches = useCallback(async () => {
     if (!id) {
       setError("Keine ID angegeben");
       setLoading(false);
@@ -69,7 +80,7 @@ export default function MatchList({ type, id, onStatusChange }: MatchListProps) 
             acc[matches[index].candidate_id] = candidate;
           }
           return acc;
-        }, {} as Record<string, any>);
+        }, {} as Record<string, Candidate>);
         setCandidates(candidateMap);
       }
     } catch (error) {
@@ -77,7 +88,11 @@ export default function MatchList({ type, id, onStatusChange }: MatchListProps) 
       setError("Fehler beim Laden der Matches. Bitte versuchen Sie es später erneut.");
     }
     setLoading(false);
-  };
+  }, [id, type, matchingService]);
+
+  useEffect(() => {
+    loadMatches();
+  }, [loadMatches]);
 
   const handleStatusChange = async (matchId: string, status: string) => {
     try {

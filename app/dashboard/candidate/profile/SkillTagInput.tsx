@@ -19,7 +19,7 @@ export default function SkillTagInput({ value, onChange }: {
   useEffect(() => {
     async function fetchSkills() {
       setLoading(true);
-      const { data, error } = await supabase.from("skills").select("id, name").order("name");
+      const { data } = await supabase.from("skills").select("id, name").order("name");
       if (data) setAllSkills(data);
       setLoading(false);
     }

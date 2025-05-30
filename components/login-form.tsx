@@ -63,8 +63,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         if (company?.onboarding_status === "not_started") {
           router.push("/onboarding")
         } else {
-          // Unternehmen werden zum Client-Dashboard weitergeleitet
-          router.push("/dashboard/client")
+          // Unternehmen werden zum Company-Dashboard weitergeleitet
+          router.push("/dashboard/company")
         }
       } else {
         router.push("/auth/login")

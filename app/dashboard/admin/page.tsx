@@ -4,11 +4,32 @@ import { useEffect, useState } from "react";
 import { SectionCards } from "@/components/section-cards";
 import { ChartAreaInteractive } from "@/components/chart-area-interactive";
 import { DataTable } from "@/components/data-table";
-import { useProfile } from "@/context/ProfileContext";
 import { createClient } from "@/lib/supabase/client";
 import { ColumnDef } from "@tanstack/react-table";
 
-const adminColumns: ColumnDef<any>[] = [
+type AuditLog = {
+  id: string;
+  action: 'create' | 'update' | 'delete';
+  table_name: string;
+  user_id: string | null;
+  created_at: string;
+  record_id: string | null;
+  profiles?: {
+    id: string;
+    role: string;
+  };
+};
+
+type FormattedAuditLog = {
+  id: string;
+  action: string;
+  table_name: string;
+  user_email: string;
+  created_at: string;
+  record_id: string;
+};
+
+const adminColumns: ColumnDef<FormattedAuditLog>[] = [
   { accessorKey: "action", header: "Aktion" },
   { accessorKey: "table_name", header: "Tabelle" },
   { accessorKey: "user_email", header: "Benutzer" },
@@ -17,7 +38,7 @@ const adminColumns: ColumnDef<any>[] = [
 ];
 
 export default function AdminDashboard() {
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<FormattedAuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
@@ -38,7 +59,7 @@ export default function AdminDashboard() {
           .limit(50);
 
         if (logs) {
-          const formattedLogs = logs.map((log: any) => ({
+          const formattedLogs = logs.map((log: AuditLog) => ({
             id: log.id,
             action: getActionText(log.action),
             table_name: getTableText(log.table_name),

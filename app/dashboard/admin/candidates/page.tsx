@@ -1,16 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import Link from "next/link";
 import CandidateFormModal from "./CandidateFormModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Candidate, CandidateFormValues } from "@/types/candidate";
 
 export default function AdminCandidateList() {
-  const [candidates, setCandidates] = useState<any[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editCandidate, setEditCandidate] = useState<any | null>(null);
+  const [editCandidate, setEditCandidate] = useState<Candidate | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -32,7 +32,7 @@ export default function AdminCandidateList() {
     setModalOpen(true);
   };
 
-  const handleEdit = (candidate: any) => {
+  const handleEdit = (candidate: Candidate) => {
     setEditCandidate(candidate);
     setModalOpen(true);
   };
@@ -46,7 +46,7 @@ export default function AdminCandidateList() {
     fetchCandidates();
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: CandidateFormValues) => {
     const supabase = createClient();
     if (editCandidate) {
       // Update

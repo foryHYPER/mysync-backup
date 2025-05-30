@@ -20,8 +20,9 @@ import {
   FormMessage,
   FormField,
 } from "@/components/ui/form";
-import SkillTagInput, { Skill } from "../../candidate/profile/SkillTagInput";
+import SkillTagInput from "../../candidate/profile/SkillTagInput";
 import { useEffect } from "react";
+import { CandidateFormValues } from "@/types/candidate";
 
 const candidateFormSchema = z.object({
   first_name: z.string().min(2, { message: "Vorname muss mindestens 2 Zeichen haben." }),
@@ -32,8 +33,6 @@ const candidateFormSchema = z.object({
   profile_photo_url: z.string().url().optional().or(z.literal("")),
   skills: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
 });
-
-type CandidateFormValues = z.infer<typeof candidateFormSchema>;
 
 type CandidateFormModalProps = {
   open: boolean;
@@ -61,7 +60,7 @@ export default function CandidateFormModal({ open, onOpenChange, initialValues, 
     if (initialValues) {
       form.reset(initialValues);
     }
-  }, [initialValues]);
+  }, [initialValues, form]);
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>

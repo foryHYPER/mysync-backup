@@ -4,7 +4,6 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { CandidateMatch } from "@/lib/services/matching";
 
 export type MatchTableItem = {
   id: string;

@@ -7,6 +7,36 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+type OnboardingSteps = {
+  [key: string]: boolean;
+};
+
+interface Company {
+  id: string;
+  name: string | null;
+  address: string | null;
+  website: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  logo: string | null;
+  onboarding_steps: OnboardingSteps | null;
+  onboarding_progress: number | null;
+  onboarding_status: 'not_started' | 'in_progress' | 'completed' | null;
+  onboarding_completed_at: string | null;
+}
+
+interface CompanyForm {
+  name: string;
+  address: string;
+  website: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
+  logo: string;
+  [key: string]: string;
+}
+
 const ONBOARDING_STEPS = [
   { key: "company_info", label: "Unternehmensdaten", fields: [
     { name: "name", label: "Firmenname", type: "text", required: true },
@@ -27,12 +57,20 @@ const ONBOARDING_STEPS = [
 export default function OnboardingPage() {
   const router = useRouter();
   const profile = useProfile();
-  const [company, setCompany] = useState<any>(null);
+  const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<any>({});
+  const [form, setForm] = useState<CompanyForm>({
+    name: "",
+    address: "",
+    website: "",
+    contact_name: "",
+    contact_email: "",
+    contact_phone: "",
+    logo: "",
+  });
   const [error, setError] = useState<string | null>(null);
   const [editContact, setEditContact] = useState(false);
   const [contactPrefilled, setContactPrefilled] = useState(false);
@@ -41,13 +79,13 @@ export default function OnboardingPage() {
     const fetchCompany = async () => {
       setLoading(true);
       const supabase = createClient();
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("companies")
         .select("*")
         .eq("id", profile.id)
         .single();
       if (data) {
-        setCompany(data);
+        setCompany(data as Company);
         setForm({
           name: data.name || "",
           address: data.address || "",
@@ -77,7 +115,7 @@ export default function OnboardingPage() {
     setError(null);
     const supabase = createClient();
     const step = ONBOARDING_STEPS[currentStep];
-    let updateData: any = {};
+    let updateData: Partial<Company> = {};
     if (step.key === "company_info") {
       updateData = {
         name: form.name,

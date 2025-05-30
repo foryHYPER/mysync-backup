@@ -3,17 +3,23 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormItem, FormLabel, FormControl, FormDescription, FormMessage, FormField } from "@/components/ui/form";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon } from "lucide-react";
-import SkillTagInput, { Skill } from "./SkillTagInput";
+import SkillTagInput from "./SkillTagInput";
+import type { Skill } from "./SkillTagInput";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+
+type DatabaseSkillRow = {
+  skill_id: string;
+  skills: Skill | null;
+};
 
 const accountFormSchema = z.object({
   first_name: z.string().min(2, { message: "Vorname muss mindestens 2 Zeichen haben." }),
@@ -54,6 +60,14 @@ export default function AccountSection() {
         .from("candidate_skills")
         .select("skill_id, skills(name, id)")
         .eq("candidate_id", user.id);
+
+      const formattedSkills = (skillRows as DatabaseSkillRow[] | null)
+        ?.filter(row => row.skills !== null)
+        .map(row => ({
+          id: row.skills!.id,
+          name: row.skills!.name
+        })) || [];
+
       setDefaultValues({
         first_name: data?.first_name || "",
         last_name: data?.last_name || "",
@@ -61,7 +75,7 @@ export default function AccountSection() {
         phone: data?.phone || "",
         resume_url: data?.resume_url || "",
         profile_photo_url: data?.profile_photo_url || "",
-        skills: skillRows ? skillRows.map((row: any) => ({ id: row.skills.id, name: row.skills.name })) : [],
+        skills: formattedSkills,
         availabilityNow: data?.availability === "Ab sofort",
         availabilityDate: data?.availability && data.availability !== "Ab sofort" ? new Date(data.availability) : undefined,
       });
@@ -72,7 +86,7 @@ export default function AccountSection() {
         phone: data?.phone || "",
         resume_url: data?.resume_url || "",
         profile_photo_url: data?.profile_photo_url || "",
-        skills: skillRows ? skillRows.map((row: any) => ({ id: row.skills.id, name: row.skills.name })) : [],
+        skills: formattedSkills,
         availabilityNow: data?.availability === "Ab sofort",
         availabilityDate: data?.availability && data.availability !== "Ab sofort" ? new Date(data.availability) : undefined,
       });
@@ -206,9 +220,11 @@ export default function AccountSection() {
                   <FormItem>
                     <FormLabel>Lebenslauf-Link</FormLabel>
                     <FormControl>
-                      <Input placeholder="URL zum Lebenslauf" {...field} />
+                      <Input placeholder="https://..." {...field} />
                     </FormControl>
-                    <FormDescription>Link zu deinem Lebenslauf (optional).</FormDescription>
+                    <FormDescription>
+                      Link zu Ihrem Lebenslauf (&ldquo;.pdf&rdquo; oder &ldquo;.docx&rdquo;)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -220,9 +236,11 @@ export default function AccountSection() {
                   <FormItem>
                     <FormLabel>Profilfoto-Link</FormLabel>
                     <FormControl>
-                      <Input placeholder="URL zum Profilfoto" {...field} />
+                      <Input placeholder="https://..." {...field} />
                     </FormControl>
-                    <FormDescription>Link zu deinem Profilfoto (optional).</FormDescription>
+                    <FormDescription>
+                      Link zu Ihrem Profilfoto (&ldquo;.jpg&rdquo; oder &ldquo;.png&rdquo;)
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -295,7 +313,7 @@ export default function AccountSection() {
                         )}
                       />
                     </div>
-                    <FormDescription>Wähle ein Datum oder setze die Checkbox für "Ab sofort".</FormDescription>
+                    <FormDescription>Wähle ein Datum oder setze die Checkbox für &ldquo;Ab sofort&rdquo;.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

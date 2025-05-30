@@ -1,4 +1,4 @@
-import { IconDashboard, IconFileAi, IconUser, IconMail, IconMessages, IconUsers } from "@tabler/icons-react";
+import { IconDashboard, IconUser, IconMail, IconMessages, IconUsers } from "@tabler/icons-react";
 
 export const navCandidate = [
   { title: "Dashboard", url: "/dashboard/candidate", icon: IconDashboard },

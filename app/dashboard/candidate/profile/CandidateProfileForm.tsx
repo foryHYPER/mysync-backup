@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, ChangeEvent, FormEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -10,19 +10,33 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-} from "@/components/ui/dropdown-menu";
-import {
   Popover,
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+type DatabaseSkillRow = {
+  skill_id: string;
+  skills: {
+    id: string;
+    name: string;
+  } | null;
+};
+
+type FormData = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  resume_url: string;
+  profile_photo_url: string;
+  skills: string;
+  availability: string;
+};
+
 export default function CandidateProfileForm({ onSuccess }: { onSuccess?: () => void } = {}) {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormData>({
     first_name: "",
     last_name: "",
     email: "",
@@ -34,7 +48,6 @@ export default function CandidateProfileForm({ onSuccess }: { onSuccess?: () => 
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const [skills, setSkills] = useState<Skill[]>([]);
   const [availabilityNow, setAvailabilityNow] = useState(false);
   const [availabilityDate, setAvailabilityDate] = useState<Date | undefined>(undefined);
@@ -46,7 +59,7 @@ export default function CandidateProfileForm({ onSuccess }: { onSuccess?: () => 
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("candidates")
         .select("*")
         .eq("id", user.id)
@@ -75,7 +88,13 @@ export default function CandidateProfileForm({ onSuccess }: { onSuccess?: () => 
         .select("skill_id, skills(name, id)")
         .eq("candidate_id", user.id);
       if (skillRows) {
-        setSkills(skillRows.map((row: any) => ({ id: row.skills.id, name: row.skills.name })));
+        const typedSkillRows = skillRows as unknown as DatabaseSkillRow[];
+        setSkills(typedSkillRows
+          .filter(row => row.skills !== null)
+          .map(row => ({
+            id: row.skills!.id,
+            name: row.skills!.name
+          })));
       }
       setLoading(false);
     }
@@ -83,14 +102,13 @@ export default function CandidateProfileForm({ onSuccess }: { onSuccess?: () => 
     // eslint-disable-next-line
   }, []);
 
-  const handleChange = (e: any) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
-    setError("");
     setSuccess(false);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -101,7 +119,7 @@ export default function CandidateProfileForm({ onSuccess }: { onSuccess?: () => 
           ? format(availabilityDate, "yyyy-MM-dd")
           : "";
       // Prüfen, ob Kandidat existiert
-      const { data: candidateExists, error: selectError } = await supabase
+      const { data: candidateExists } = await supabase
         .from("candidates")
         .select("id")
         .eq("id", user.id)
@@ -143,17 +161,15 @@ export default function CandidateProfileForm({ onSuccess }: { onSuccess?: () => 
         );
       }
       if (updateError) {
-        setError(updateError.message);
-        setSuccess(false);
         console.error("Update/Insert error:", updateError);
+        setSuccess(false);
       } else {
         setSuccess(true);
         if (onSuccess) onSuccess();
       }
-    } catch (err: any) {
-      setError(err.message || "Unbekannter Fehler beim Speichern.");
-      setSuccess(false);
+    } catch (err) {
       console.error("Submit error:", err);
+      setSuccess(false);
     }
     setSaving(false);
   };
@@ -252,7 +268,6 @@ export default function CandidateProfileForm({ onSuccess }: { onSuccess?: () => 
               </div>
             </div>
             {success && <div className="text-green-600">Profil erfolgreich gespeichert!</div>}
-            {error && <div className="text-red-500">{error}</div>}
           </CardContent>
           <CardFooter className="justify-end">
             <Button type="submit" disabled={saving}>

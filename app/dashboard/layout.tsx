@@ -6,8 +6,6 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { SiteHeader } from '@/components/site-header';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import DynamicBreadcrumbs from '@/components/dynamic-breadcrumbs';
-import { cookies } from "next/headers";
-import { headers } from "next/headers";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -32,13 +30,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
     email: user.email,
   };
 
-  const { data: company, error: companyError } = profileWithEmail.role === "company"
+  const { data: company } = profileWithEmail.role === "company"
     ? await supabase
         .from("companies")
         .select("onboarding_status")
         .eq("id", user.id)
         .single()
-    : { data: null, error: null };
+    : { data: null };
 
   // Verhindere Redirect-Loop: Wenn children die OnboardingPage ist, kein Redirect
   // Annahme: OnboardingPage wird nicht im DashboardLayout gerendert, sondern separat
