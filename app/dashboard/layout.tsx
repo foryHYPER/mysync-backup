@@ -1,3 +1,4 @@
+import type { Viewport } from "next";
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { ProfileProvider } from '@/context/ProfileProvider';
@@ -6,6 +7,11 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { SiteHeader } from '@/components/site-header';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import DynamicBreadcrumbs from '@/components/dynamic-breadcrumbs';
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();

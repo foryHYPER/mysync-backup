@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Basic optimizations
-  swcMinify: true,
-  optimizeFonts: true,
   // Configure output for server-side rendering
   output: 'standalone',
   // Configure image optimization
