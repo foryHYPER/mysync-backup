@@ -20,7 +20,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { navAdmin } from "@/components/sidebar/nav-admin";
-import { navClient } from "@/components/sidebar/nav-client";
+import { navClient } from "@/components/sidebar/nav-company";
 import { navCandidate } from "@/components/sidebar/nav-candidate";
 
 type NavItem = {

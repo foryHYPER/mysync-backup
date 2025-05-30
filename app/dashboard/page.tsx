@@ -11,11 +11,12 @@ export default function DashboardRouter() {
   useEffect(() => {
     if (!profile.role) {
       router.replace("/auth/login");
-    } else if (profile.role === "company") {
-      // Unternehmen werden zum Client-Dashboard weitergeleitet
-      router.replace("/dashboard/client");
-    } else {
+    } else if (["admin", "company", "candidate"].includes(profile.role)) {
       router.replace(`/dashboard/${profile.role}`);
+    } else {
+      // Fallback für unbekannte Rollen
+      console.error(`Unbekannte Rolle: ${profile.role}`);
+      router.replace("/auth/login");
     }
   }, [profile.role, router]);
 
