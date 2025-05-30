@@ -59,18 +59,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
           "--header-height": "3rem",
         } as React.CSSProperties}
       >
-        <div className="flex h-[100dvh] w-full overflow-hidden">
+        <div className="flex h-screen w-full">
           <AppSidebar user={profileWithEmail} role={profileWithEmail.role} />
-          <div className="flex-1 w-full overflow-auto">
-            <div className="flex flex-col w-full h-full">
-              <SiteHeader>
-                <Breadcrumb>
-                  <DynamicBreadcrumbs />
-                </Breadcrumb>
-              </SiteHeader>
-              <main className="flex flex-1 flex-col w-full bg-background">
-                {children}
-              </main>
+          <div className="flex-1 flex flex-col min-h-0">
+            <SiteHeader>
+              <Breadcrumb>
+                <DynamicBreadcrumbs />
+              </Breadcrumb>
+            </SiteHeader>
+            <div className="flex-1 overflow-y-auto">
+              {children}
             </div>
           </div>
         </div>

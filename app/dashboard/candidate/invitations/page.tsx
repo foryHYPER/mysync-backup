@@ -196,120 +196,235 @@ export default function CandidateInvitationsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <div className="mb-2">Lade Einladungen...</div>
+      <main className="container mx-auto p-8">
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <div className="text-muted-foreground">Lade Einladungen...</div>
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col">
-      <Toaster />
-      <div className="@container/main flex flex-1 flex-col gap-2">
-        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-          <div className="px-4 lg:px-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Einladungen</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-4 flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
-                  <Input
-                    placeholder="Suche nach Unternehmen oder Position..."
-                    value={search}
-                    onChange={e => {
-                      setSearch(e.target.value);
-                      setPage(0);
-                    }}
-                    className="max-w-xs"
-                  />
-                </div>
-                <DataTable columns={getColumns(handleShowDetails, handleShowSuggest, handleAccept, handleDecline)} data={paged} />
-              </CardContent>
-              <CardFooter className="flex justify-between items-center mt-4">
-                <span>
-                  Seite {page + 1} von {pageCount || 1}
-                </span>
-                <div className="space-x-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                  >
-                    Zurück
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
-                    disabled={page >= pageCount - 1}
-                  >
-                    Weiter
-                  </Button>
-                </div>
-              </CardFooter>
-            </Card>
-          </div>
-        </div>
+    <main className="container mx-auto p-8 space-y-8">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Interview-Einladungen</h1>
+        <p className="text-muted-foreground">
+          Hier finden Sie alle Ihre Interview-Einladungen und können diese verwalten.
+        </p>
       </div>
-      <Dialog open={!!details} onOpenChange={open => { if (!open) handleDialogClose(); }}>
-        <DialogContent className="transition-all duration-300">
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="space-y-1">
+              <CardTitle>Ihre Einladungen</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {invitations.length} Einladung{invitations.length !== 1 ? 'en' : ''} insgesamt
+              </p>
+            </div>
+            <div className="w-full sm:w-auto">
+              <Input
+                placeholder="Nach Unternehmen oder Position suchen..."
+                value={search}
+                onChange={e => {
+                  setSearch(e.target.value);
+                  setPage(0);
+                }}
+                className="w-full sm:w-[300px] font-medium text-[#000000] placeholder:text-muted-foreground"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {error ? (
+            <div className="text-center py-8 space-y-4">
+              <div className="text-red-500 text-lg">{error}</div>
+              <Button 
+                variant="outline" 
+                onClick={loadInvitations}
+                className="font-medium text-[#000000]"
+              >
+                Erneut versuchen
+              </Button>
+            </div>
+          ) : invitations.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="mx-auto h-12 w-12 text-muted-foreground mb-4">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-12 w-12"
+                >
+                  <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+                  <line x1="16" x2="16" y1="2" y2="6" />
+                  <line x1="8" x2="8" y1="2" y2="6" />
+                  <line x1="3" x2="21" y1="10" y2="10" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Keine Einladungen vorhanden</h3>
+              <p className="text-muted-foreground">
+                Sie haben aktuell keine Interview-Einladungen.
+              </p>
+            </div>
+          ) : (
+            <>
+              <DataTable 
+                columns={getColumns(handleShowDetails, handleShowSuggest, handleAccept, handleDecline)} 
+                data={paged} 
+              />
+              {pageCount > 1 && (
+                <div className="mt-6 flex items-center justify-between border-t pt-4">
+                  <span className="text-sm text-muted-foreground">
+                    Seite {page + 1} von {pageCount}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPage(p => Math.max(0, p - 1))}
+                      disabled={page === 0}
+                      className="font-medium text-[#000000]"
+                    >
+                      Zurück
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                      disabled={page >= pageCount - 1}
+                      className="font-medium text-[#000000]"
+                    >
+                      Weiter
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!details} onOpenChange={() => handleDialogClose()}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Einladungsdetails</DialogTitle>
             <DialogDescription>
-              Alle Informationen zur Einladung.
+              {details?.company} - {details?.job_title}
             </DialogDescription>
           </DialogHeader>
-          {error ? (
-            <div className="text-red-600 py-4">{error}</div>
-          ) : suggestConfirmed ? (
-            <div className="py-8 text-center">
-              <div className="text-green-600 font-semibold mb-2">Ihr Terminvorschlag wurde übermittelt!</div>
-              <Button variant="default" onClick={handleDialogClose}>Schließen</Button>
+          
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Datum</p>
+                <p className="text-sm">{details?.date}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Uhrzeit</p>
+                <p className="text-sm">{details?.time}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Ort</p>
+                <p className="text-sm">{details?.location}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Status</p>
+                <Badge className={statusColor[details?.status || 'pending']}>
+                  {details?.status === 'pending' ? 'Ausstehend' : 
+                   details?.status === 'accepted' ? 'Angenommen' : 'Abgelehnt'}
+                </Badge>
+              </div>
             </div>
-          ) : details && (
-            <div className="space-y-2">
-              <div><b>Unternehmen:</b> {details.company}</div>
-              <div><b>Position:</b> {details.job_title}</div>
-              <div><b>Datum:</b> {details.date}</div>
-              <div><b>Uhrzeit:</b> {details.time}</div>
-              <div><b>Ort:</b> {details.location}</div>
-              <div className="flex items-center gap-2"><b>Status:</b> <Badge className={statusColor[details.status] || ""}>{details.status.charAt(0).toUpperCase() + details.status.slice(1)}</Badge></div>
-              {details.message && (
-                <div className="pt-2">
-                  <b>Nachricht:</b>
-                  <p className="mt-1 text-sm text-muted-foreground">{details.message}</p>
-                </div>
-              )}
-              {showSuggest && details ? (
-                <form className="space-y-2 pt-2" onSubmit={handleSuggestSubmit}>
-                  <div>
-                    <label className="block mb-1">Neuer Terminvorschlag:</label>
-                    <Input type="date" value={suggestDate} onChange={e => setSuggestDate(e.target.value)} required className="mb-2" />
-                    <Input type="time" value={suggestTime} onChange={e => setSuggestTime(e.target.value)} required />
+            
+            {details?.message && (
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Nachricht</p>
+                <p className="text-sm whitespace-pre-wrap">{details.message}</p>
+              </div>
+            )}
+          </div>
+
+          {details?.status === 'pending' && (
+            <DialogFooter className="flex-col sm:flex-row gap-2">
+              {!showSuggest ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => handleAction('suggest')}
+                    className="font-medium text-[#000000]"
+                  >
+                    Termin vorschlagen
+                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleAction('decline')}
+                      className="font-medium text-[#000000]"
+                    >
+                      Ablehnen
+                    </Button>
+                    <Button
+                      onClick={() => handleAction('accept')}
+                      className="font-medium text-white bg-primary hover:bg-primary/90"
+                    >
+                      Annehmen
+                    </Button>
                   </div>
-                  <div className="flex gap-2 pt-2">
-                    <Button type="submit" size="sm" variant="default">Vorschlag senden</Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setShowSuggest(false)}>Abbrechen</Button>
+                </>
+              ) : (
+                <form onSubmit={handleSuggestSubmit} className="w-full space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Datum</label>
+                      <Input
+                        type="date"
+                        value={suggestDate}
+                        onChange={e => setSuggestDate(e.target.value)}
+                        required
+                        className="font-medium text-[#000000]"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Uhrzeit</label>
+                      <Input
+                        type="time"
+                        value={suggestTime}
+                        onChange={e => setSuggestTime(e.target.value)}
+                        required
+                        className="font-medium text-[#000000]"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowSuggest(false)}
+                      className="font-medium text-[#000000]"
+                    >
+                      Abbrechen
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="font-medium text-white bg-primary hover:bg-primary/90"
+                    >
+                      Vorschlag senden
+                    </Button>
                   </div>
                 </form>
-              ) : details && details.status === "pending" && !showSuggest && (
-                <div className="flex gap-2 pt-2">
-                  <Button size="sm" variant="default" onClick={() => handleAction("accept")}>Annehmen</Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleAction("decline")}>Ablehnen</Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowSuggest(true)}>Alternativtermin</Button>
-                </div>
               )}
-            </div>
+            </DialogFooter>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={handleDialogClose}>Schließen</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </main>
   );
 } 

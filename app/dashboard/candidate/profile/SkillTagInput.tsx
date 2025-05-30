@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
+import { X, Plus } from "lucide-react";
+import { toast } from "sonner";
 
 export type Skill = { id: string; name: string };
 
@@ -18,62 +20,96 @@ export default function SkillTagInput({ value, onChange }: {
 
   useEffect(() => {
     async function fetchSkills() {
-      setLoading(true);
-      const { data } = await supabase.from("skills").select("id, name").order("name");
-      if (data) setAllSkills(data);
-      setLoading(false);
-    }
-    fetchSkills();
-    // eslint-disable-next-line
-  }, []);
-
-  const addSkill = async (name: string) => {
-    setError(null);
-    name = name.trim();
-    if (!name) return;
-    // Prüfen, ob Skill schon existiert
-    let skill = allSkills.find((s) => s.name.toLowerCase() === name.toLowerCase());
-    if (!skill) {
-      // Skill in DB anlegen
-      const { data, error } = await supabase.from("skills").insert({ name }).select("id, name").single();
-      if (error) {
-        setError("Skill konnte nicht angelegt werden: " + error.message);
+      const { data, error: fetchError } = await supabase
+        .from("skills")
+        .select("*")
+        .order("name");
+      if (fetchError) {
+        console.error("Fehler beim Laden der Skills:", fetchError);
         return;
       }
       if (data) {
-        skill = data;
-        setAllSkills((prev) => [...prev, skill!]);
-      } else {
-        setError("Skill konnte nicht angelegt werden (keine Rückgabe von Supabase).");
-        return;
+        setAllSkills(data);
       }
     }
-    if (skill && !value.find((s) => s.id === skill!.id)) {
-      onChange([...value, skill]);
-    }
-    setInput("");
-  };
-
-  const removeSkill = (id: string) => {
-    onChange(value.filter((s) => s.id !== id));
-  };
+    fetchSkills();
+  }, [supabase]);
 
   const filteredSkills = allSkills.filter(
-    (s) =>
-      s.name.toLowerCase().includes(input.toLowerCase()) &&
-      !value.find((v) => v.id === s.id)
+    (skill) =>
+      skill.name.toLowerCase().includes(input.toLowerCase()) &&
+      !value.some((v) => v.id === skill.id)
   );
 
+  const removeSkill = (id: string) => {
+    onChange(value.filter((skill) => skill.id !== id));
+  };
+
+  const addSkill = async (skillName: string) => {
+    if (!skillName.trim()) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Prüfen, ob der Skill bereits existiert
+      const existingSkill = allSkills.find(
+        (s) => s.name.toLowerCase() === skillName.toLowerCase()
+      );
+
+      if (existingSkill) {
+        if (!value.some((v) => v.id === existingSkill.id)) {
+          onChange([...value, existingSkill]);
+        }
+        setInput("");
+        return;
+      }
+
+      // Neuen Skill erstellen
+      const { data, error: insertError } = await supabase
+        .from("skills")
+        .insert({ name: skillName })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      if (data) {
+        const newSkill = { id: data.id, name: data.name };
+        setAllSkills([...allSkills, newSkill]);
+        onChange([...value, newSkill]);
+        setInput("");
+        toast.success("Neuer Skill hinzugefügt");
+      }
+    } catch (err) {
+      console.error("Fehler beim Hinzufügen des Skills:", err);
+      setError("Fehler beim Hinzufügen des Skills. Bitte versuchen Sie es erneut.");
+      toast.error("Fehler beim Hinzufügen des Skills");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div>
-      <div className="flex flex-wrap gap-2 mb-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
         {value.map((skill) => (
-          <span key={skill.id} className="inline-flex items-center bg-primary/10 text-primary px-2 py-1 rounded text-sm">
+          <span
+            key={skill.id}
+            className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 transition-colors"
+          >
             {skill.name}
-            <button type="button" className="ml-1 text-red-500" onClick={() => removeSkill(skill.id)}>&times;</button>
+            <button
+              type="button"
+              onClick={() => removeSkill(skill.id)}
+              className="ml-1 rounded-full p-0.5 hover:bg-background/20 focus:outline-none focus:ring-2 focus:ring-secondary-foreground/50"
+            >
+              <X className="h-3 w-3" />
+              <span className="sr-only">Skill entfernen</span>
+            </button>
           </span>
         ))}
       </div>
+
       <div className="flex gap-2">
         <Input
           value={input}
@@ -85,26 +121,38 @@ export default function SkillTagInput({ value, onChange }: {
               await addSkill(input);
             }
           }}
-          className="flex-1"
+          className="font-medium"
         />
-        <Button type="button" onClick={() => addSkill(input)} disabled={!input.trim() || loading}>
+        <Button
+          type="button"
+          onClick={() => addSkill(input)}
+          disabled={!input.trim() || loading}
+          variant="outline"
+          className="font-medium"
+        >
+          <Plus className="mr-2 h-4 w-4" />
           Hinzufügen
         </Button>
       </div>
+
       {input && filteredSkills.length > 0 && (
-        <div className="border rounded mt-2 bg-white shadow z-10 max-h-40 overflow-auto">
+        <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-background py-1 shadow-lg">
           {filteredSkills.map((skill) => (
-            <div
+            <button
               key={skill.id}
-              className="px-3 py-1 cursor-pointer hover:bg-primary/10"
+              type="button"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none"
               onClick={() => addSkill(skill.name)}
             >
               {skill.name}
-            </div>
+            </button>
           ))}
         </div>
       )}
-      {error && <div className="text-red-500 mt-2">{error}</div>}
+
+      {error && (
+        <p className="text-sm text-red-500">{error}</p>
+      )}
     </div>
   );
 } 

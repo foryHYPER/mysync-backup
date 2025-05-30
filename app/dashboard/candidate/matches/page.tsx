@@ -167,105 +167,160 @@ export default function CandidateMatchesPage() {
   });
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Ihre Job-Matches</h1>
+    <main className="container mx-auto p-8 space-y-8">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Job-Matches</h1>
         <p className="text-muted-foreground">
           Basierend auf Ihrem Profil haben wir {matches.length} passende Stellen gefunden.
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {enrichedMatches.map((match) => {
-          const jobInfo = match.jobInfo;
-          
-          return (
-            <Card key={match.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{jobInfo.title}</CardTitle>
-                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                      <Building2 className="h-4 w-4" />
-                      <span>{jobInfo.companies?.name || "Unbekannt"}</span>
+      {loading ? (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <div className="text-muted-foreground">Lade Matches...</div>
+          </div>
+        </div>
+      ) : error ? (
+        <Card className="p-8">
+          <CardContent className="text-center space-y-4">
+            <div className="text-red-500 text-lg">{error}</div>
+            <Button 
+              variant="outline" 
+              onClick={loadMatches}
+              className="font-medium text-[#000000]"
+            >
+              Erneut versuchen
+            </Button>
+          </CardContent>
+        </Card>
+      ) : matches.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <Briefcase className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Keine Matches gefunden</h3>
+            <p className="text-muted-foreground">
+              Aktuell gibt es keine passenden Stellenangebote für Ihr Profil.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {enrichedMatches.map((match) => {
+            const jobInfo = match.jobInfo;
+            const matchScore = Math.round(match.match_score);
+            const skillMatches = match.match_details.skillMatches.filter(s => s.match).length;
+            const totalSkills = match.match_details.skillMatches.length;
+            
+            return (
+              <Card key={match.id} className="group hover:shadow-lg transition-all duration-200">
+                <CardHeader className="space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg font-semibold line-clamp-2">
+                        {jobInfo.title}
+                      </CardTitle>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Building2 className="h-4 w-4" />
+                        <span className="line-clamp-1">{jobInfo.companies?.name || "Unbekannt"}</span>
+                      </div>
+                    </div>
+                    <Badge 
+                      className={`${getStatusColor(match.status)} text-white px-2.5 py-0.5 text-xs font-medium`}
+                    >
+                      {getStatusText(match.status)}
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Match-Score</span>
+                      <span className="text-sm font-semibold">{matchScore}%</span>
+                    </div>
+                    <Progress 
+                      value={matchScore} 
+                      className={`h-2 ${matchScore >= 80 ? "bg-green-500" : matchScore >= 60 ? "bg-yellow-500" : "bg-red-500"}`}
+                    />
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="line-clamp-1">{jobInfo.location || "Remote"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span className="line-clamp-1">{jobInfo.salary_range || "Nicht angegeben"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <span>{format(new Date(match.created_at), "dd. MMM yyyy", { locale: de })}</span>
                     </div>
                   </div>
-                  <Badge className={`${getStatusColor(match.status)} text-white`}>
-                    {getStatusText(match.status)}
-                  </Badge>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Progress value={match.match_score} className="w-24" />
-                    <span className="text-sm font-semibold">{Math.round(match.match_score)}%</span>
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span>{jobInfo.location || "Remote"}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span>{jobInfo.salary_range || "Nicht angegeben"}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span>Erstellt: {format(new Date(match.created_at), "dd. MMM yyyy", { locale: de })}</span>
-                  </div>
-                </div>
 
-                <div className="mt-4 space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground">Match-Details:</div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>Skills: {match.match_details.skillMatches.filter(s => s.match).length}/{match.match_details.skillMatches.length}</div>
-                    <div>Erfahrung: {Math.round(match.match_details.experienceMatch)}%</div>
-                    <div>Standort: {match.match_details.locationMatch ? "✓" : "✗"}</div>
-                    <div>Verfügbar: {match.match_details.availabilityMatch ? "✓" : "✗"}</div>
+                  <div className="rounded-lg bg-muted/50 p-3 space-y-2">
+                    <div className="text-xs font-semibold text-muted-foreground">Match-Details</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">Skills:</span>
+                        <span className="text-muted-foreground">{skillMatches}/{totalSkills}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">Erfahrung:</span>
+                        <span className="text-muted-foreground">{Math.round(match.match_details.experienceMatch)}%</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">Standort:</span>
+                        <span className={match.match_details.locationMatch ? "text-green-600" : "text-red-600"}>
+                          {match.match_details.locationMatch ? "✓" : "✗"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">Verfügbar:</span>
+                        <span className={match.match_details.availabilityMatch ? "text-green-600" : "text-red-600"}>
+                          {match.match_details.availabilityMatch ? "✓" : "✗"}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                {jobInfo.description && (
-                  <div className="mt-4">
-                    <p className="text-sm text-muted-foreground line-clamp-3">
+                  {jobInfo.description && (
+                    <div className="text-sm text-muted-foreground line-clamp-3">
                       {jobInfo.description}
-                    </p>
-                  </div>
-                )}
+                    </div>
+                  )}
 
-                <div className="mt-4 flex gap-2">
-                  <Button 
-                    size="sm" 
-                    className="flex-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Hier könnte eine Bewerbungsfunktion implementiert werden
-                    }}
-                  >
-                    Bewerben
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStatusChange(match.id, "rejected");
-                    }}
-                  >
-                    Ablehnen
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button 
+                      size="sm" 
+                      className="flex-1 font-medium text-white bg-primary hover:bg-primary/90"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Hier könnte eine Bewerbungsfunktion implementiert werden
+                      }}
+                    >
+                      Bewerben
+                    </Button>
+                    <Button 
+                      size="sm"
+                      className="font-medium text-white bg-secondary hover:bg-secondary/90"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Hier könnte eine Detailansicht implementiert werden
+                      }}
+                    >
+                      Details
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </main>
   );
 } 

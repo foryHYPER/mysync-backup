@@ -128,14 +128,14 @@ const chartData = [
 
 const chartConfig = {
   visitors: {
-    label: "Visitors",
+    label: "Besucher",
   },
   desktop: {
     label: "Desktop",
     color: "var(--primary)",
   },
   mobile: {
-    label: "Mobile",
+    label: "Mobil",
     color: "var(--primary)",
   },
 } satisfies ChartConfig
@@ -167,12 +167,12 @@ export function ChartAreaInteractive() {
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardTitle>Total Visitors</CardTitle>
+        <CardTitle>Gesamtbesucher</CardTitle>
         <CardDescription>
           <span className="hidden @[540px]/card:block">
-            Total for the last 3 months
+            Gesamt für die letzten 3 Monate
           </span>
-          <span className="@[540px]/card:hidden">Last 3 months</span>
+          <span className="@[540px]/card:hidden">Letzte 3 Monate</span>
         </CardDescription>
         <CardAction>
           <ToggleGroup
@@ -182,38 +182,41 @@ export function ChartAreaInteractive() {
             variant="outline"
             className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
           >
-            <ToggleGroupItem value="90d">Last 3 months</ToggleGroupItem>
-            <ToggleGroupItem value="30d">Last 30 days</ToggleGroupItem>
-            <ToggleGroupItem value="7d">Last 7 days</ToggleGroupItem>
+            <ToggleGroupItem value="90d">Letzte 3 Monate</ToggleGroupItem>
+            <ToggleGroupItem value="30d">Letzte 30 Tage</ToggleGroupItem>
+            <ToggleGroupItem value="7d">Letzte 7 Tage</ToggleGroupItem>
           </ToggleGroup>
           <Select value={timeRange} onValueChange={setTimeRange}>
             <SelectTrigger
               className="flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
               size="sm"
-              aria-label="Select a value"
+              aria-label="Zeitraum auswählen"
             >
-              <SelectValue placeholder="Last 3 months" />
+              <SelectValue placeholder="Letzte 3 Monate" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
               <SelectItem value="90d" className="rounded-lg">
-                Last 3 months
+                Letzte 3 Monate
               </SelectItem>
               <SelectItem value="30d" className="rounded-lg">
-                Last 30 days
+                Letzte 30 Tage
               </SelectItem>
               <SelectItem value="7d" className="rounded-lg">
-                Last 7 days
+                Letzte 7 Tage
               </SelectItem>
             </SelectContent>
           </Select>
         </CardAction>
       </CardHeader>
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+      <CardContent className="pb-4">
         <ChartContainer
           config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
+          className="aspect-auto h-[280px] w-full"
         >
-          <AreaChart data={filteredData}>
+          <AreaChart 
+            data={filteredData} 
+            margin={{ top: 10, right: 10, bottom: 30, left: 0 }}
+          >
             <defs>
               <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
                 <stop
@@ -246,10 +249,11 @@ export function ChartAreaInteractive() {
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              minTickGap={32}
+              minTickGap={40}
+              height={60}
               tickFormatter={(value) => {
                 const date = new Date(value)
-                return date.toLocaleDateString("en-US", {
+                return date.toLocaleDateString("de-DE", {
                   month: "short",
                   day: "numeric",
                 })
@@ -261,7 +265,7 @@ export function ChartAreaInteractive() {
               content={
                 <ChartTooltipContent
                   labelFormatter={(value) => {
-                    return new Date(value).toLocaleDateString("en-US", {
+                    return new Date(value).toLocaleDateString("de-DE", {
                       month: "short",
                       day: "numeric",
                     })
