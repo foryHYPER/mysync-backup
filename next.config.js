@@ -3,8 +3,8 @@ const nextConfig = {
   // Basic optimizations
   swcMinify: true,
   optimizeFonts: true,
-  // Configure output for static export
-  output: 'export',
+  // Configure output for server-side rendering
+  output: 'standalone',
   // Disable image optimization
   images: {
     unoptimized: true,

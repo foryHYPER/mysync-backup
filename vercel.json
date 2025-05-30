@@ -3,7 +3,7 @@
   "devCommand": "next dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "outputDirectory": "out",
+  "outputDirectory": ".next",
   "headers": [
     {
       "source": "/(.*)",
