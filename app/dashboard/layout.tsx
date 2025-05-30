@@ -47,22 +47,27 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <ProfileProvider profile={profileWithEmail}>
       <SidebarProvider
+        defaultOpen={true}
         style={{
-          "--sidebar-width": "calc(var(--spacing) * 72)",
-          "--header-height": "calc(var(--spacing) * 12)",
+          "--sidebar-width": "16rem",
+          "--header-height": "3rem",
         } as React.CSSProperties}
       >
-        <AppSidebar user={profileWithEmail} role={profileWithEmail.role} />
-        <SidebarInset>
-          <SiteHeader>
-            <Breadcrumb>
-              <DynamicBreadcrumbs />
-            </Breadcrumb>
-          </SiteHeader>
-          <div className="flex flex-1 flex-col">
-            {children}
+        <div className="flex h-[100dvh] w-full overflow-hidden">
+          <AppSidebar user={profileWithEmail} role={profileWithEmail.role} />
+          <div className="flex-1 w-full overflow-auto">
+            <div className="flex flex-col w-full h-full">
+              <SiteHeader>
+                <Breadcrumb>
+                  <DynamicBreadcrumbs />
+                </Breadcrumb>
+              </SiteHeader>
+              <main className="flex flex-1 flex-col w-full bg-background">
+                {children}
+              </main>
+            </div>
           </div>
-        </SidebarInset>
+        </div>
       </SidebarProvider>
     </ProfileProvider>
   );
