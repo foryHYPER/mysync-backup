@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormItem, FormLabel, FormControl, FormDescription, FormMessage, FormField } from "@/components/ui/form";
@@ -52,11 +51,13 @@ export default function AccountSection() {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      
       const { data } = await supabase
         .from("candidates")
         .select("*")
         .eq("id", user.id)
         .single();
+        
       const { data: skillRows } = await supabase
         .from("candidate_skills")
         .select("skill_id, skills(name, id)")
@@ -69,7 +70,7 @@ export default function AccountSection() {
           name: row.skills!.name
         })) || [];
 
-      setDefaultValues({
+      const newValues = {
         first_name: data?.first_name || "",
         last_name: data?.last_name || "",
         email: user.email || "",
@@ -79,23 +80,14 @@ export default function AccountSection() {
         skills: formattedSkills,
         availabilityNow: data?.availability === "Ab sofort",
         availabilityDate: data?.availability && data.availability !== "Ab sofort" ? new Date(data.availability) : undefined,
-      });
-      form.reset({
-        first_name: data?.first_name || "",
-        last_name: data?.last_name || "",
-        email: user.email || "",
-        phone: data?.phone || "",
-        resume_url: data?.resume_url || "",
-        profile_photo_url: data?.profile_photo_url || "",
-        skills: formattedSkills,
-        availabilityNow: data?.availability === "Ab sofort",
-        availabilityDate: data?.availability && data.availability !== "Ab sofort" ? new Date(data.availability) : undefined,
-      });
+      };
+
+      setDefaultValues(newValues);
+      form.reset(newValues);
       setLoading(false);
     }
     fetchProfile();
-    // eslint-disable-next-line
-  }, []);
+  }, [form, supabase]);
 
   async function onSubmit(data: AccountFormValues) {
     setSaving(true);
@@ -159,7 +151,7 @@ export default function AccountSection() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
+      <div className="flex items-center justify-center py-8">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <div className="text-muted-foreground">Lade Profildaten...</div>
@@ -169,9 +161,9 @@ export default function AccountSection() {
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <div className="grid gap-8">
+    <div className="space-y-6">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             <FormField
               control={form.control}
@@ -180,11 +172,7 @@ export default function AccountSection() {
                 <FormItem>
                   <FormLabel>Vorname</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="Vorname" 
-                      {...field} 
-                      className="font-medium"
-                    />
+                    <Input placeholder="Vorname" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -197,11 +185,7 @@ export default function AccountSection() {
                 <FormItem>
                   <FormLabel>Nachname</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="Nachname" 
-                      {...field} 
-                      className="font-medium"
-                    />
+                    <Input placeholder="Nachname" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -209,205 +193,175 @@ export default function AccountSection() {
             />
           </div>
 
-          <div className="grid gap-6">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>E-Mail</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="E-Mail" 
-                      {...field} 
-                      disabled 
-                      className="bg-muted/50 font-medium"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Ihre E-Mail-Adresse kann nicht geändert werden.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="phone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Telefon</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="+49 123 456789" 
-                      {...field} 
-                      className="font-medium"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Ihre Telefonnummer für Rückfragen von Unternehmen.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="resume_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Lebenslauf</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="https://..." 
-                      {...field} 
-                      className="font-medium"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Link zu Ihrem Lebenslauf (PDF oder DOCX). Stellen Sie sicher, dass der Link öffentlich zugänglich ist.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="profile_photo_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Profilfoto</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="https://..." 
-                      {...field} 
-                      className="font-medium"
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Link zu Ihrem Profilfoto (JPG oder PNG). Empfohlene Größe: 400x400 Pixel.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="skills"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Skills</FormLabel>
-                  <FormControl>
-                    <SkillTagInput 
-                      value={field.value || []} 
-                      onChange={field.onChange} 
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Fügen Sie Ihre wichtigsten Fähigkeiten und Kompetenzen hinzu.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="availabilityNow"
-              render={({ field }) => (
-                <FormItem className="space-y-4">
-                  <FormLabel>Verfügbarkeit</FormLabel>
-                  <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="availability_now"
-                        checked={field.value}
-                        onChange={(e) => field.onChange(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                      />
-                      <label 
-                        htmlFor="availability_now" 
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        Ab sofort verfügbar
-                      </label>
-                    </div>
-
-                    <FormField
-                      control={form.control}
-                      name="availabilityDate"
-                      render={({ field: dateField }) => (
-                        <FormItem className="flex flex-col">
-                          <FormControl>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button
-                                  id="availability-date"
-                                  variant="outline"
-                                  className={cn(
-                                    "w-[240px] justify-start text-left font-normal",
-                                    field.value && "opacity-50 pointer-events-none"
-                                  )}
-                                  disabled={field.value}
-                                >
-                                  <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {dateField.value ? (
-                                    format(dateField.value, "dd.MM.yyyy")
-                                  ) : (
-                                    <span className="text-muted-foreground">Verfügbares Datum wählen</span>
-                                  )}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={dateField.value ?? undefined}
-                                  onSelect={dateField.onChange}
-                                  disabled={field.value}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </FormControl>
-                          <FormDescription>
-                            Wählen Sie ein Datum, ab dem Sie verfügbar sind.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </FormItem>
-              )}
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end">
-          <Button 
-            type="submit" 
-            disabled={saving}
-            className="font-medium"
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Speichern...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Profil speichern
-              </>
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>E-Mail</FormLabel>
+                <FormControl>
+                  <Input placeholder="E-Mail" {...field} disabled className="bg-muted/50" />
+                </FormControl>
+                <FormDescription>
+                  Ihre E-Mail-Adresse kann nicht geändert werden.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
             )}
-          </Button>
-        </div>
-      </form>
-    </Form>
+          />
+
+          <FormField
+            control={form.control}
+            name="phone"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Telefon</FormLabel>
+                <FormControl>
+                  <Input placeholder="+49 123 456789" {...field} />
+                </FormControl>
+                <FormDescription>
+                  Ihre Telefonnummer für Rückfragen von Unternehmen.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="resume_url"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Lebenslauf</FormLabel>
+                <FormControl>
+                  <Input placeholder="https://..." {...field} />
+                </FormControl>
+                <FormDescription>
+                  Link zu Ihrem Lebenslauf (PDF oder DOCX). Stellen Sie sicher, dass der Link öffentlich zugänglich ist.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="profile_photo_url"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Profilfoto</FormLabel>
+                <FormControl>
+                  <Input placeholder="https://..." {...field} />
+                </FormControl>
+                <FormDescription>
+                  Link zu Ihrem Profilfoto (JPG oder PNG). Empfohlene Größe: 400x400 Pixel.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="skills"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Skills</FormLabel>
+                <FormControl>
+                  <SkillTagInput value={field.value || []} onChange={field.onChange} />
+                </FormControl>
+                <FormDescription>
+                  Fügen Sie Ihre wichtigsten Fähigkeiten und Kompetenzen hinzu.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="availabilityNow"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Verfügbarkeit</FormLabel>
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="availability_now"
+                      checked={field.value}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="availability_now" className="text-sm font-medium">
+                      Ab sofort verfügbar
+                    </label>
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="availabilityDate"
+                    render={({ field: dateField }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-[240px] justify-start text-left font-normal",
+                                  field.value && "opacity-50 pointer-events-none"
+                                )}
+                                disabled={field.value}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {dateField.value ? (
+                                  format(dateField.value, "dd.MM.yyyy")
+                                ) : (
+                                  <span className="text-muted-foreground">Verfügbares Datum wählen</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={dateField.value ?? undefined}
+                                onSelect={dateField.onChange}
+                                disabled={field.value}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </FormControl>
+                        <FormDescription>
+                          Wählen Sie ein Datum, ab dem Sie verfügbar sind.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </FormItem>
+            )}
+          />
+
+          <div className="flex justify-end pt-4">
+            <Button type="submit" disabled={saving}>
+              {saving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Speichern...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Profil speichern
+                </>
+              )}
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </div>
   );
 } 
