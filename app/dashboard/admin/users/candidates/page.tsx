@@ -17,11 +17,11 @@ import {
   IconEye,
   IconMail,
   IconMapPin,
-  IconBriefcase,
-  IconCalendar,
   IconStar,
   IconDownload,
-  IconExternalLink
+  IconExternalLink,
+  IconCalendar,
+  IconBriefcase
 } from "@tabler/icons-react";
 import {
   DropdownMenu,
@@ -45,17 +45,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-type CandidateWithStats = {
+type CandidateUser = {
   id: string;
+  email: string;
   first_name: string;
   last_name: string;
-  email?: string;
+  created_at: string;
+  last_sign_in_at?: string;
   location?: string;
   experience_level?: string;
   availability?: string;
   status?: string;
-  created_at: string;
-  last_sign_in_at?: string;
   skills: Array<{ id: string; name: string }>;
   resume_url?: string;
   total_matches: number;
@@ -63,13 +63,14 @@ type CandidateWithStats = {
   avg_match_score?: number;
 };
 
-export default function CandidatesPage() {
-  const [candidates, setCandidates] = useState<CandidateWithStats[]>([]);
-  const [filteredCandidates, setFilteredCandidates] = useState<CandidateWithStats[]>([]);
+export default function CandidateUsersPage() {
+  const [candidates, setCandidates] = useState<CandidateUser[]>([]);
+  const [filteredCandidates, setFilteredCandidates] = useState<CandidateUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [experienceFilter, setExperienceFilter] = useState<string>("all");
+  const [availabilityFilter, setAvailabilityFilter] = useState<string>("all");
   const supabase = createClient();
 
   useEffect(() => {
@@ -78,30 +79,34 @@ export default function CandidatesPage() {
 
   useEffect(() => {
     filterCandidates();
-  }, [candidates, searchTerm, statusFilter, experienceFilter]);
+  }, [candidates, searchTerm, statusFilter, experienceFilter, availabilityFilter]);
 
   async function loadCandidates() {
     try {
       setLoading(true);
 
-      // Load candidates with profile data
+      // Load candidate profiles with auth data
+      const { data: authUsers } = await supabase.auth.admin.listUsers();
+      const candidateAuthUsers = authUsers.users.filter(user => 
+        user.user_metadata?.role === 'candidate' || 
+        user.app_metadata?.role === 'candidate'
+      );
+
+      // Load candidate data from candidates table
       const { data: candidatesData } = await supabase
         .from("candidates")
         .select(`
           id, first_name, last_name, location, experience_level, 
           availability, status, created_at, skills, resume_url
         `)
-        .order("created_at", { ascending: false });
+        .in("id", candidateAuthUsers.map(u => u.id));
 
       if (!candidatesData) return;
 
-      // Get auth data for emails and last login
-      const { data: authUsers } = await supabase.auth.admin.listUsers();
-
-      // Load matches data for each candidate
+      // Load match statistics for each candidate
       const candidatesWithStats = await Promise.all(
         candidatesData.map(async (candidate) => {
-          const authUser = authUsers.users.find(u => u.id === candidate.id);
+          const authUser = candidateAuthUsers.find(u => u.id === candidate.id);
           
           // Get match statistics
           const [totalMatchesResult, activeMatchesResult, matchScoresResult] = await Promise.all([
@@ -171,10 +176,15 @@ export default function CandidatesPage() {
       filtered = filtered.filter(candidate => candidate.experience_level === experienceFilter);
     }
 
+    // Availability filter
+    if (availabilityFilter !== "all") {
+      filtered = filtered.filter(candidate => candidate.availability === availabilityFilter);
+    }
+
     setFilteredCandidates(filtered);
   }
 
-  async function handleCandidateAction(candidateId: string, action: "activate" | "deactivate" | "email") {
+  async function handleCandidateAction(candidateId: string, action: "activate" | "deactivate" | "email" | "delete") {
     try {
       switch (action) {
         case "activate":
@@ -189,6 +199,10 @@ export default function CandidatesPage() {
           break;
         case "email":
           toast.info("E-Mail-Funktion noch nicht implementiert");
+          break;
+        case "delete":
+          // This would require careful cascade deletion
+          toast.info("Löschfunktion noch nicht implementiert");
           break;
       }
     } catch (error) {
@@ -229,10 +243,10 @@ export default function CandidatesPage() {
     return <Badge variant="secondary">{availabilityMap[availability as keyof typeof availabilityMap] || availability}</Badge>;
   };
 
-  const candidateColumns: ColumnDef<CandidateWithStats>[] = [
+  const candidateColumns: ColumnDef<CandidateUser>[] = [
     {
       accessorKey: "name",
-      header: "Name",
+      header: "Kandidat",
       cell: ({ row }) => (
         <div className="flex flex-col">
           <span className="font-medium">
@@ -268,14 +282,14 @@ export default function CandidatesPage() {
       header: "Skills",
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1 max-w-[200px]">
-          {row.original.skills.slice(0, 3).map((skill, index) => (
+          {row.original.skills.slice(0, 2).map((skill, index) => (
             <Badge key={index} variant="outline" className="text-xs">
               {skill.name}
             </Badge>
           ))}
-          {row.original.skills.length > 3 && (
+          {row.original.skills.length > 2 && (
             <Badge variant="outline" className="text-xs">
-              +{row.original.skills.length - 3}
+              +{row.original.skills.length - 2}
             </Badge>
           )}
         </div>
@@ -283,10 +297,10 @@ export default function CandidatesPage() {
     },
     {
       accessorKey: "total_matches",
-      header: "Matches",
+      header: "Performance",
       cell: ({ row }) => (
         <div className="flex flex-col text-sm">
-          <span className="font-medium">{row.original.total_matches} gesamt</span>
+          <span className="font-medium">{row.original.total_matches} Matches</span>
           <span className="text-muted-foreground">{row.original.active_matches} aktiv</span>
           {row.original.avg_match_score && (
             <div className="flex items-center gap-1">
@@ -299,13 +313,13 @@ export default function CandidatesPage() {
     },
     {
       accessorKey: "created_at",
-      header: "Registriert",
+      header: "Beigetreten",
       cell: ({ row }) => (
         <div className="flex flex-col text-sm">
           <span>{new Date(row.original.created_at).toLocaleDateString("de-DE")}</span>
           <span className="text-muted-foreground">
             {row.original.last_sign_in_at 
-              ? new Date(row.original.last_sign_in_at).toLocaleDateString("de-DE")
+              ? `Zuletzt: ${new Date(row.original.last_sign_in_at).toLocaleDateString("de-DE")}`
               : "Nie eingeloggt"
             }
           </span>
@@ -327,16 +341,16 @@ export default function CandidatesPage() {
               <DialogTrigger asChild>
                 <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                   <IconEye className="h-4 w-4 mr-2" />
-                  Details ansehen
+                  Profile ansehen
                 </DropdownMenuItem>
               </DialogTrigger>
               <DialogContent className="max-w-2xl">
                 <DialogHeader>
                   <DialogTitle>
-                    Kandidatendetails - {row.original.first_name} {row.original.last_name}
+                    Kandidatenprofil - {row.original.first_name} {row.original.last_name}
                   </DialogTitle>
                   <DialogDescription>
-                    Detaillierte Informationen über den Kandidaten
+                    Vollständige Kandidateninformationen und Statistiken
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -385,7 +399,7 @@ export default function CandidatesPage() {
                         <Button variant="outline" size="sm" asChild>
                           <a href={row.original.resume_url} target="_blank" rel="noopener noreferrer">
                             <IconExternalLink className="h-4 w-4 mr-2" />
-                            Lebenslauf ansehen
+                            Lebenslauf öffnen
                           </a>
                         </Button>
                       </div>
@@ -404,7 +418,7 @@ export default function CandidatesPage() {
                       <p className="text-2xl font-bold">
                         {row.original.avg_match_score ? row.original.avg_match_score.toFixed(1) + "%" : "N/A"}
                       </p>
-                      <p className="text-sm text-muted-foreground">Ø Match Score</p>
+                      <p className="text-sm text-muted-foreground">Match-Score</p>
                     </div>
                   </div>
                 </div>
@@ -429,6 +443,13 @@ export default function CandidatesPage() {
                 Aktivieren
               </DropdownMenuItem>
             )}
+            
+            <DropdownMenuItem 
+              className="text-destructive"
+              onClick={() => handleCandidateAction(row.original.id, "delete")}
+            >
+              Kandidat löschen
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -439,9 +460,9 @@ export default function CandidatesPage() {
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6">
         <div className="space-y-2 mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">Kandidatenverwaltung</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Kandidaten-Benutzer</h1>
           <p className="text-muted-foreground">
-            Verwalten Sie alle registrierten Kandidaten und deren Profile
+            Verwaltung aller Benutzer mit Kandidaten-Rolle im System
           </p>
         </div>
 
@@ -451,7 +472,7 @@ export default function CandidatesPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Gesamt</p>
+                  <p className="text-sm text-muted-foreground">Gesamt Kandidaten</p>
                   <p className="text-2xl font-bold">{candidates.length}</p>
                 </div>
                 <IconUserCheck className="h-8 w-8 text-muted-foreground" />
@@ -462,7 +483,7 @@ export default function CandidatesPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Aktiv</p>
+                  <p className="text-sm text-muted-foreground">Aktive Kandidaten</p>
                   <p className="text-2xl font-bold">
                     {candidates.filter(c => c.status === "active").length}
                   </p>
@@ -546,6 +567,18 @@ export default function CandidatesPage() {
                   <SelectItem value="expert">Experte</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={availabilityFilter} onValueChange={setAvailabilityFilter}>
+                <SelectTrigger className="w-full md:w-[180px]">
+                  <SelectValue placeholder="Verfügbarkeit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Alle</SelectItem>
+                  <SelectItem value="immediately">Sofort</SelectItem>
+                  <SelectItem value="1_month">1 Monat</SelectItem>
+                  <SelectItem value="3_months">3 Monate</SelectItem>
+                  <SelectItem value="negotiable">Verhandelbar</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -553,9 +586,9 @@ export default function CandidatesPage() {
         {/* Candidates Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Kandidaten ({filteredCandidates.length})</CardTitle>
+            <CardTitle>Kandidaten-Benutzer ({filteredCandidates.length})</CardTitle>
             <CardDescription>
-              Übersicht aller Kandidaten mit Filteroptionen und Verwaltungsfunktionen
+              Alle Benutzerkonten mit Kandidaten-Rolle und deren Profile
             </CardDescription>
           </CardHeader>
           <CardContent>
