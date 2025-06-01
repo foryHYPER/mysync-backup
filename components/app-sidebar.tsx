@@ -21,7 +21,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { navAdmin } from "@/components/sidebar/nav-admin";
-import { navClient } from "@/components/sidebar/nav-company";
+import { companyNavigation } from "@/components/sidebar/nav-company";
 import { navCandidate } from "@/components/sidebar/nav-candidate";
 import { createClient } from "@/lib/supabase/client";
 
@@ -91,7 +91,7 @@ export function AppSidebar({ user, role, ...props }: React.ComponentProps<typeof
       break;
     case "client":
     case "company":
-      navItems = navClient.filter(item => !item.roles || item.roles.includes(role));
+      navItems = companyNavigation;
       break;
     case "candidate":
       navItems = navCandidate;

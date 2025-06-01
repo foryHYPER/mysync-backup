@@ -12,6 +12,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import FileUpload from "@/components/ui/file-upload";
 import { 
   Calendar as CalendarIcon, 
   Save, 
@@ -23,7 +24,8 @@ import {
   Briefcase,
   Clock,
   Plus,
-  X
+  X,
+  FileText
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
@@ -154,6 +156,7 @@ function SkillInput({
 export default function CandidateProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const supabase = createClient();
 
   const form = useForm<ProfileFormValues>({
@@ -185,6 +188,8 @@ export default function CandidateProfilePage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        setUserId(user.id);
+
         const { data: candidate } = await supabase
           .from("candidates")
           .select("*")
@@ -203,24 +208,33 @@ export default function CandidateProfilePage() {
             name: row.skills!.name
           })) || [];
 
-        const formData = {
-          first_name: candidate?.first_name || "",
-          last_name: candidate?.last_name || "",
-          email: user.email || "",
-          phone: candidate?.phone || "",
-          resume_url: candidate?.resume_url || "",
-          profile_photo_url: candidate?.profile_photo_url || "",
-          bio: "", // Add bio field to database if needed
-          location: candidate?.location || "",
-          experience: candidate?.experience || 0,
-          skills: formattedSkills,
-          availability_now: candidate?.availability === "Ab sofort",
-          availability_date: candidate?.availability && candidate.availability !== "Ab sofort" 
+        if (candidate) {
+          const availabilityNow = candidate.availability === "Ab sofort";
+          const availabilityDate = !availabilityNow && candidate.availability 
             ? new Date(candidate.availability) 
-            : null,
-        };
+            : null;
 
-        form.reset(formData);
+          form.reset({
+            first_name: candidate.first_name || "",
+            last_name: candidate.last_name || "",
+            email: user.email || "",
+            phone: candidate.phone || "",
+            resume_url: candidate.resume_url || "",
+            profile_photo_url: candidate.profile_photo_url || "",
+            bio: "",
+            location: candidate.location || "",
+            experience: candidate.experience || 0,
+            skills: formattedSkills,
+            availability_now: availabilityNow,
+            availability_date: availabilityDate,
+          });
+        } else {
+          form.reset({
+            ...form.getValues(),
+            email: user.email || "",
+            skills: formattedSkills,
+          });
+        }
       } catch (error) {
         console.error("Error fetching profile:", error);
         toast.error("Fehler beim Laden des Profils");
@@ -480,29 +494,66 @@ export default function CandidateProfilePage() {
             {/* Professional Information */}
             <Card>
               <CardHeader>
-                <CardTitle>Berufliche Informationen</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Briefcase className="h-5 w-5" />
+                  Berufliche Informationen
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Resume URL */}
-                <FormField
-                  control={form.control}
-                  name="resume_url"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-2">
-                        <LinkIcon className="h-4 w-4" />
-                        Lebenslauf URL
-                      </FormLabel>
-                      <FormControl>
-                        <Input placeholder="https://..." {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Link zu Ihrem Lebenslauf (PDF oder Word). Stellen Sie sicher, dass der Link öffentlich zugänglich ist.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
+                {/* File Upload Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Lebenslauf-Upload
+                    </h3>
+                  </div>
+                  
+                  {userId && (
+                    <FileUpload
+                      candidateId={userId}
+                      onUploadSuccess={(fileUrl) => {
+                        form.setValue("resume_url", fileUrl);
+                        toast.success("Lebenslauf erfolgreich hochgeladen!");
+                      }}
+                      onUploadError={(error) => {
+                        toast.error(`Upload-Fehler: ${error}`);
+                      }}
+                      existingFileUrl={form.watch("resume_url")}
+                    />
                   )}
-                />
+                  
+                  <div className="text-sm text-muted-foreground bg-blue-50 p-3 rounded-lg border border-blue-200">
+                    <p className="font-medium text-blue-800 mb-1">💡 Tipp:</p>
+                    <p className="text-blue-700">
+                      Laden Sie hier Ihren Lebenslauf als PDF hoch. Nach dem Upload wird Ihr Lebenslauf automatisch 
+                      analysiert und von unserem Admin-Team überprüft.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Resume URL - Als Fallback Option */}
+                <div className="space-y-2">
+                  <FormField
+                    control={form.control}
+                    name="resume_url"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <LinkIcon className="h-4 w-4" />
+                          Oder: Lebenslauf URL (alternativ)
+                        </FormLabel>
+                        <FormControl>
+                          <Input placeholder="https://..." {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Falls Sie bereits einen öffentlich zugänglichen Lebenslauf haben, können Sie hier den direkten Link eintragen.
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 {/* Skills */}
                 <FormField

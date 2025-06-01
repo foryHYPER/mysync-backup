@@ -3,15 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed-companies": "npx tsx scripts/seed-test-companies.ts",
+    "seed-companies:clean": "npx tsx scripts/seed-test-companies.ts --clean",
+    "setup-resumes": "npx tsx scripts/setup-resumes-database.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@supabase/auth-helpers-nextjs": "^0.10.0",

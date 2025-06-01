@@ -25,13 +25,23 @@ export default async function CompanyLayout({ children }: { children: React.Reac
     redirect("/dashboard");
   }
 
-  const profileWithEmail = {
+  // Get company data to include company_id in profile
+  const { data: companyData } = await supabase
+    .from("companies")
+    .select("id, name, onboarding_status")
+    .eq("id", user.id)
+    .single();
+
+  const profileWithEmailAndCompany = {
     ...profile,
     email: user.email,
+    company_id: user.id, // For companies, the profile id IS the company id
+    company_name: companyData?.name || "",
+    onboarding_status: companyData?.onboarding_status || "not_started"
   };
 
   return (
-    <ProfileProvider profile={profileWithEmail}>
+    <ProfileProvider profile={profileWithEmailAndCompany}>
       {children}
     </ProfileProvider>
   );

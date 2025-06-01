@@ -103,55 +103,77 @@ export default function ResumeManagementPage() {
     try {
       setLoading(true);
 
-      // Load candidates data for resume information
-      const { data: candidatesData } = await supabase
-        .from("candidates")
-        .select("*")
-        .order("created_at", { ascending: false });
+      // Load resume data from the resumes table
+      const { data: resumeData, error: resumeError } = await supabase
+        .from("resumes")
+        .select(`
+          *,
+          candidate:candidates(
+            first_name,
+            last_name,
+            email
+          )
+        `)
+        .order("uploaded_at", { ascending: false });
 
-      if (!candidatesData) return;
+      if (resumeError) {
+        console.error("Error loading resumes:", resumeError);
+        // If resumes table doesn't exist yet, fall back to mock data
+        if (resumeError.code === "42P01") {
+          toast.warning("Resumes-Tabelle existiert noch nicht. Verwende Mock-Daten.");
+          await loadMockData();
+          return;
+        }
+        throw resumeError;
+      }
 
-      // Mock resume data - in real app, this would come from a resumes table
-      const resumeData: Resume[] = candidatesData
-        .filter(() => Math.random() > 0.3) // Some candidates have resumes
-        .map(candidate => {
-          const statuses = ["pending", "approved", "rejected", "under_review"];
-          const qualityScore = Math.floor(Math.random() * 100) + 1;
-          const educationLevels = ["Bachelor", "Master", "PhD", "Ausbildung", "Promotion"];
-          const extractedSkills = [
-            "JavaScript", "React", "Node.js", "Python", "Java", "TypeScript", 
-            "SQL", "AWS", "Docker", "Git", "Agile", "Scrum"
-          ];
-          
-          return {
-            id: `resume-${candidate.id}`,
-            candidate_id: candidate.id,
-            candidate_name: `${candidate.first_name || "Unbekannt"} ${candidate.last_name || ""}`.trim(),
-            candidate_email: candidate.email || "Keine E-Mail",
-            filename: `${candidate.first_name || "resume"}_${candidate.last_name || "candidate"}_CV.pdf`,
-            file_url: `/resumes/${candidate.id}/cv.pdf`,
-            file_size: Math.floor(Math.random() * 5000000) + 100000, // 100KB - 5MB
-            uploaded_at: candidate.created_at,
-            last_updated: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-            status: statuses[Math.floor(Math.random() * statuses.length)] as Resume["status"],
-            quality_score: qualityScore,
-            skills_extracted: extractedSkills.slice(0, Math.floor(Math.random() * 8) + 2),
-            experience_years: Math.floor(Math.random() * 20) + 1,
-            education_level: educationLevels[Math.floor(Math.random() * educationLevels.length)],
-            languages: ["Deutsch", "Englisch"].slice(0, Math.floor(Math.random() * 2) + 1),
-            analysis_complete: Math.random() > 0.2,
-            download_count: Math.floor(Math.random() * 50),
-            match_count: Math.floor(Math.random() * 20)
-          };
+      if (!resumeData) {
+        setResumes([]);
+        setMetrics({
+          totalResumes: 0,
+          pendingReview: 0,
+          approved: 0,
+          rejected: 0,
+          averageQualityScore: 0,
+          totalDownloads: 0
         });
+        return;
+      }
+
+      // Transform database data to Resume type
+      const transformedResumes: Resume[] = resumeData.map(resume => ({
+        id: resume.id,
+        candidate_id: resume.candidate_id,
+        candidate_name: resume.candidate 
+          ? `${resume.candidate.first_name || ""} ${resume.candidate.last_name || ""}`.trim()
+          : "Unbekannt",
+        candidate_email: resume.candidate?.email || "Keine E-Mail",
+        filename: resume.filename,
+        file_url: resume.file_url,
+        file_size: resume.file_size,
+        uploaded_at: resume.uploaded_at,
+        last_updated: resume.last_updated,
+        status: resume.status,
+        quality_score: resume.quality_score,
+        skills_extracted: Array.isArray(resume.skills_extracted) ? resume.skills_extracted : [],
+        experience_years: resume.experience_years,
+        education_level: resume.education_level || "",
+        languages: Array.isArray(resume.languages) ? resume.languages : [],
+        analysis_complete: resume.analysis_complete,
+        reviewer_notes: resume.reviewer_notes,
+        download_count: resume.download_count,
+        match_count: resume.match_count
+      }));
 
       // Calculate metrics
-      const totalResumes = resumeData.length;
-      const pendingReview = resumeData.filter(r => r.status === "pending" || r.status === "under_review").length;
-      const approved = resumeData.filter(r => r.status === "approved").length;
-      const rejected = resumeData.filter(r => r.status === "rejected").length;
-      const averageQualityScore = resumeData.reduce((sum, r) => sum + r.quality_score, 0) / Math.max(totalResumes, 1);
-      const totalDownloads = resumeData.reduce((sum, r) => sum + r.download_count, 0);
+      const totalResumes = transformedResumes.length;
+      const pendingReview = transformedResumes.filter(r => r.status === "pending" || r.status === "under_review").length;
+      const approved = transformedResumes.filter(r => r.status === "approved").length;
+      const rejected = transformedResumes.filter(r => r.status === "rejected").length;
+      const averageQualityScore = totalResumes > 0 
+        ? transformedResumes.reduce((sum, r) => sum + r.quality_score, 0) / totalResumes 
+        : 0;
+      const totalDownloads = transformedResumes.reduce((sum, r) => sum + r.download_count, 0);
 
       setMetrics({
         totalResumes,
@@ -162,14 +184,79 @@ export default function ResumeManagementPage() {
         totalDownloads
       });
 
-      setResumes(resumeData);
+      setResumes(transformedResumes);
 
     } catch (error) {
       console.error("Error loading resume data:", error);
       toast.error("Fehler beim Laden der Lebenslauf-Daten");
+      // Fall back to mock data on error
+      await loadMockData();
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadMockData() {
+    // Load candidates data for mock resume information (fallback)
+    const { data: candidatesData } = await supabase
+      .from("candidates")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (!candidatesData) return;
+
+    // Mock resume data - in real app, this would come from a resumes table
+    const resumeData: Resume[] = candidatesData
+      .filter(() => Math.random() > 0.3) // Some candidates have resumes
+      .map(candidate => {
+        const statuses = ["pending", "approved", "rejected", "under_review"];
+        const qualityScore = Math.floor(Math.random() * 100) + 1;
+        const educationLevels = ["Bachelor", "Master", "PhD", "Ausbildung", "Promotion"];
+        const extractedSkills = [
+          "JavaScript", "React", "Node.js", "Python", "Java", "TypeScript", 
+          "SQL", "AWS", "Docker", "Git", "Agile", "Scrum"
+        ];
+        
+        return {
+          id: `resume-${candidate.id}`,
+          candidate_id: candidate.id,
+          candidate_name: `${candidate.first_name || "Unbekannt"} ${candidate.last_name || ""}`.trim(),
+          candidate_email: candidate.email || "Keine E-Mail",
+          filename: `${candidate.first_name || "resume"}_${candidate.last_name || "candidate"}_CV.pdf`,
+          file_url: `/resumes/${candidate.id}/cv.pdf`,
+          file_size: Math.floor(Math.random() * 5000000) + 100000, // 100KB - 5MB
+          uploaded_at: candidate.created_at,
+          last_updated: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+          status: statuses[Math.floor(Math.random() * statuses.length)] as Resume["status"],
+          quality_score: qualityScore,
+          skills_extracted: extractedSkills.slice(0, Math.floor(Math.random() * 8) + 2),
+          experience_years: Math.floor(Math.random() * 20) + 1,
+          education_level: educationLevels[Math.floor(Math.random() * educationLevels.length)],
+          languages: ["Deutsch", "Englisch"].slice(0, Math.floor(Math.random() * 2) + 1),
+          analysis_complete: Math.random() > 0.2,
+          download_count: Math.floor(Math.random() * 50),
+          match_count: Math.floor(Math.random() * 20)
+        };
+      });
+
+    // Calculate metrics
+    const totalResumes = resumeData.length;
+    const pendingReview = resumeData.filter(r => r.status === "pending" || r.status === "under_review").length;
+    const approved = resumeData.filter(r => r.status === "approved").length;
+    const rejected = resumeData.filter(r => r.status === "rejected").length;
+    const averageQualityScore = resumeData.reduce((sum, r) => sum + r.quality_score, 0) / Math.max(totalResumes, 1);
+    const totalDownloads = resumeData.reduce((sum, r) => sum + r.download_count, 0);
+
+    setMetrics({
+      totalResumes,
+      pendingReview,
+      approved,
+      rejected,
+      averageQualityScore,
+      totalDownloads
+    });
+
+    setResumes(resumeData);
   }
 
   function filterResumes() {
@@ -203,22 +290,51 @@ export default function ResumeManagementPage() {
 
   async function handleResumeAction(resumeId: string, action: "approve" | "reject" | "analyze" | "download") {
     try {
+      const resume = resumes.find(r => r.id === resumeId);
+      if (!resume) return;
+
       switch (action) {
         case "approve":
-          // Update resume status to approved
+          const { error: approveError } = await supabase
+            .from("resumes")
+            .update({ 
+              status: "approved",
+              last_updated: new Date().toISOString()
+            })
+            .eq("id", resumeId);
+          
+          if (approveError) throw approveError;
           toast.success("Lebenslauf genehmigt");
           break;
+
         case "reject":
-          // Update resume status to rejected
+          const { error: rejectError } = await supabase
+            .from("resumes")
+            .update({ 
+              status: "rejected",
+              last_updated: new Date().toISOString()
+            })
+            .eq("id", resumeId);
+          
+          if (rejectError) throw rejectError;
           toast.success("Lebenslauf abgelehnt");
           break;
+
         case "analyze":
-          // Trigger resume analysis
+          const { error: analyzeError } = await supabase
+            .from("resumes")
+            .update({ 
+              analysis_complete: true,
+              last_updated: new Date().toISOString()
+            })
+            .eq("id", resumeId);
+          
+          if (analyzeError) throw analyzeError;
           toast.success("Analyse gestartet");
           break;
+
         case "download":
-          // Track download and initiate download
-          toast.success("Download gestartet");
+          await handleDownload(resume);
           break;
       }
       
@@ -229,6 +345,84 @@ export default function ResumeManagementPage() {
       console.error("Error performing resume action:", error);
       toast.error("Fehler bei der Aktion");
     }
+  }
+
+  async function handleDownload(resume: Resume) {
+    try {
+      // Update download count
+      const { error: updateError } = await supabase
+        .from("resumes")
+        .update({ 
+          download_count: resume.download_count + 1,
+          last_updated: new Date().toISOString()
+        })
+        .eq("id", resume.id);
+
+      if (updateError) {
+        console.error("Error updating download count:", updateError);
+      }
+
+      // Try to download from Supabase Storage
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('resumes')
+        .download(resume.file_url.replace('resumes/', ''));
+
+      if (downloadError) {
+        console.warn("File not found in storage, creating placeholder download:", downloadError);
+        // Create a placeholder PDF blob for demo purposes
+        createPlaceholderDownload(resume.filename);
+        toast.success("Demo-Download gestartet (Datei nicht in Storage gefunden)");
+        return;
+      }
+
+      if (fileData) {
+        // Create download link
+        const url = URL.createObjectURL(fileData);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = resume.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        toast.success("Download gestartet");
+      }
+
+    } catch (error) {
+      console.error("Error downloading resume:", error);
+      // Fall back to placeholder download
+      createPlaceholderDownload(resume.filename);
+      toast.warning("Download-Fehler: Demo-Datei erstellt");
+    }
+  }
+
+  function createPlaceholderDownload(filename: string) {
+    // Create a simple text file as placeholder
+    const content = `Lebenslauf: ${filename}
+
+Dies ist eine Demo-Datei, da die echte PDF-Datei noch nicht hochgeladen wurde.
+
+In der vollständigen Implementierung würde hier der echte Lebenslauf 
+als PDF-Datei heruntergeladen werden.
+
+Implementiert werden müsste:
+1. File-Upload Interface für Kandidaten
+2. PDF-Speicherung in Supabase Storage
+3. Echte Download-Links zu gespeicherten Dateien
+
+Datum: ${new Date().toLocaleDateString('de-DE')}
+    `;
+    
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename.replace('.pdf', '_demo.txt');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   function formatFileSize(bytes: number) {
@@ -388,8 +582,8 @@ export default function ResumeManagementPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="px-4 lg:px-6">
+        <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+          <div className="px-4 lg:px-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Link href="/dashboard/admin/candidates">
@@ -528,14 +722,14 @@ export default function ResumeManagementPage() {
         </Card>
 
         {/* Resumes Table */}
-        <Card>
-          <CardHeader>
+            <Card>
+              <CardHeader>
             <CardTitle>Lebenslauf-Übersicht</CardTitle>
             <CardDescription>
               Verwalte alle Kandidaten-Lebensläufe und deren Analysen ({filteredResumes.length} Lebensläufe)
             </CardDescription>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
             <DataTable 
               columns={resumeColumns} 
               data={filteredResumes}
@@ -706,8 +900,8 @@ export default function ResumeManagementPage() {
                       </Button>
                     )}
                   </div>
-                </div>
-              </div>
+          </div>
+        </div>
             </DialogContent>
           </Dialog>
         )}

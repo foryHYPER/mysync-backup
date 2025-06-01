@@ -8,7 +8,8 @@ import {
   IconShield,
   IconClipboardList,
   IconUserCheck,
-  IconHistory
+  IconHistory,
+  IconSwimming
 } from "@tabler/icons-react";
 
 export const navAdmin = [
@@ -45,6 +46,16 @@ export const navAdmin = [
     ]
   },
   { 
+    title: "Kandidaten-Pools", 
+    url: "/dashboard/admin/pools", 
+    icon: IconSwimming,
+    items: [
+      { title: "Alle Pools", url: "/dashboard/admin/pools" },
+      { title: "Pool erstellen", url: "/dashboard/admin/pools/create" },
+      { title: "Pool-Zuweisungen", url: "/dashboard/admin/pools/assignments" }
+    ]
+  },
+  { 
     title: "Berichte", 
     url: "/dashboard/admin/reports", 
     icon: IconChartBar,
@@ -61,7 +72,7 @@ export const navAdmin = [
     icon: IconSettings,
     items: [
       { title: "Einstellungen", url: "/dashboard/admin/system/settings" },
-      { title: "Audit Logs", url: "/dashboard/admin/system/audit" },
+      { title: "Audit-Protokoll", url: "/dashboard/admin/system/audit" },
       { title: "Sicherheit", url: "/dashboard/admin/system/security" }
     ]
   }

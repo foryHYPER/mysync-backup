@@ -70,7 +70,7 @@ export default function CandidatesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [experienceFilter, setExperienceFilter] = useState<string>("all");
-  const supabase = createClient();
+    const supabase = createClient();
 
   useEffect(() => {
     loadCandidates();
@@ -482,8 +482,8 @@ export default function CandidatesPage() {
                 </div>
                 <IconDownload className="h-8 w-8 text-muted-foreground" />
               </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -497,7 +497,7 @@ export default function CandidatesPage() {
                   </p>
                 </div>
                 <IconBriefcase className="h-8 w-8 text-muted-foreground" />
-              </div>
+          </div>
             </CardContent>
           </Card>
         </div>
