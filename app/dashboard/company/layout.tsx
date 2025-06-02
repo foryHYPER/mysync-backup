@@ -1,48 +1,21 @@
-import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { ProfileProvider } from '@/context/ProfileProvider';
+"use client";
 
-export default async function CompanyLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+import { useProfile } from "@/context/ProfileContext";
+import { redirect } from "next/navigation";
 
-  if (error || !user) {
-    redirect('/auth/login');
-  }
+export default function CompanyLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const profile = useProfile();
 
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError || !profile) {
-    redirect("/auth/login");
-  }
-
-  // Stelle sicher, dass der Benutzer ein Unternehmen ist
-  if (profile.role !== "company") {
+  // Redirect if user is not a company
+  if (profile && profile.role !== "company") {
     redirect("/dashboard");
   }
 
-  // Get company data to include company_id in profile
-  const { data: companyData } = await supabase
-    .from("companies")
-    .select("id, name, onboarding_status")
-    .eq("id", user.id)
-    .single();
-
-  const profileWithEmailAndCompany = {
-    ...profile,
-    email: user.email,
-    company_id: user.id, // For companies, the profile id IS the company id
-    company_name: companyData?.name || "",
-    onboarding_status: companyData?.onboarding_status || "not_started"
-  };
-
-  return (
-    <ProfileProvider profile={profileWithEmailAndCompany}>
-      {children}
-    </ProfileProvider>
-  );
+  // The parent dashboard layout already provides the sidebar
+  // so we just need to render the children
+  return <>{children}</>;
 } 

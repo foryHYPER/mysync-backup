@@ -1,20 +1,20 @@
 import { 
-  IconHome, 
-  IconUserCheck, 
+  IconChartBar, 
+  IconSwimming,
+  IconAward,
+  IconMail,
   IconUsers,
-  IconFileText,
-  IconChartDots,
+  IconBuilding,
   IconSettings,
-  IconHelpCircle,
-  IconBuildingBank,
-  IconSwimming
+  IconBriefcase,
+  IconEye
 } from "@tabler/icons-react";
   
 export const companyNavigation = [
   {
     title: "Dashboard",
     url: "/dashboard/company",
-    icon: IconHome,
+    icon: IconChartBar,
   },
   {
     title: "Kandidaten-Pools",
@@ -22,9 +22,19 @@ export const companyNavigation = [
     icon: IconSwimming,
   },
   {
-    title: "Matches",
+    title: "Meine Auswahlen",
     url: "/dashboard/company/matches",
-    icon: IconUserCheck,
+    icon: IconAward,
+  },
+  {
+    title: "Nachrichten",
+    url: "/dashboard/company/messages",
+    icon: IconMail,
+  },
+  {
+    title: "Berichte",
+    url: "/dashboard/company/reports",
+    icon: IconChartBar,
   },
   {
     title: "Team",
@@ -32,14 +42,14 @@ export const companyNavigation = [
     icon: IconUsers,
   },
   {
-    title: "Berichte",
-    url: "/dashboard/company/reports",
-    icon: IconChartDots,
-  },
-  {
     title: "Unternehmensprofil",
     url: "/dashboard/company/profile",
-    icon: IconBuildingBank,
+    icon: IconBuilding,
+  },
+  {
+    title: "Stellenausschreibungen",
+    url: "/dashboard/company/jobs",
+    icon: IconBriefcase,
   },
   {
     title: "Einstellungen",

@@ -155,6 +155,12 @@ export default function PoolDetailPage() {
     expires_at: "",
     notes: ""
   });
+  const [editingCompanyAccess, setEditingCompanyAccess] = useState<CompanyAccess | null>(null);
+  const [editCompanyForm, setEditCompanyForm] = useState({
+    access_level: "view" as "view" | "select" | "contact",
+    expires_at: "",
+    notes: ""
+  });
   const supabase = createClient();
 
   // Form states for editing
@@ -163,6 +169,8 @@ export default function PoolDetailPage() {
     description: "",
     max_candidates: "",
     visibility: "public",
+    pool_type: "main" as "main" | "custom" | "featured" | "premium",
+    status: "active" as "active" | "inactive" | "archived",
     tags: [] as string[]
   });
 
@@ -227,6 +235,8 @@ export default function PoolDetailPage() {
           description: enrichedPool.description || "",
           max_candidates: enrichedPool.max_candidates?.toString() || "",
           visibility: enrichedPool.visibility,
+          pool_type: enrichedPool.pool_type,
+          status: enrichedPool.status,
           tags: enrichedPool.tags
         });
 
@@ -557,14 +567,33 @@ export default function PoolDetailPage() {
 
   async function handleSavePool() {
     try {
+      // ✅ Validation: Check if new max_candidates limit would be exceeded
+      const newMaxCandidates = editForm.max_candidates ? parseInt(editForm.max_candidates) : null;
+      if (newMaxCandidates && newMaxCandidates < candidates.length) {
+        toast.error(
+          `Fehler: Neues Limit (${newMaxCandidates}) ist kleiner als die aktuelle Anzahl von Kandidaten (${candidates.length}). ` +
+          `Bitte entfernen Sie erst Kandidaten oder erhöhen Sie das Limit.`
+        );
+        return;
+      }
+
+      // ✅ Validation: Name cannot be empty
+      if (!editForm.name.trim()) {
+        toast.error("Pool-Name darf nicht leer sein");
+        return;
+      }
+
       const { error } = await supabase
         .from("candidate_pools")
         .update({
-          name: editForm.name,
-          description: editForm.description || null,
-          max_candidates: editForm.max_candidates ? parseInt(editForm.max_candidates) : null,
+          name: editForm.name.trim(),
+          description: editForm.description?.trim() || null,
+          max_candidates: newMaxCandidates,
           visibility: editForm.visibility,
-          tags: editForm.tags
+          pool_type: editForm.pool_type,
+          status: editForm.status,
+          tags: editForm.tags,
+          updated_at: new Date().toISOString()
         })
         .eq("id", poolId);
 
@@ -621,8 +650,30 @@ export default function PoolDetailPage() {
       return;
     }
 
+    if (pool?.max_candidates) {
+      const currentCandidates = candidates.length;
+      const newCandidates = selectedCandidates.size;
+      const totalAfterAdding = currentCandidates + newCandidates;
+      
+      if (totalAfterAdding > pool.max_candidates) {
+        const availableSlots = pool.max_candidates - currentCandidates;
+        toast.error(
+          `Pool-Limit erreicht! Maximal ${pool.max_candidates} Kandidaten erlaubt. ` +
+          `Aktuell: ${currentCandidates}, Verfügbare Plätze: ${availableSlots}, ` +
+          `Versucht hinzuzufügen: ${newCandidates}`
+        );
+        return;
+      }
+      
+      if (totalAfterAdding > pool.max_candidates * 0.8) {
+        const remaining = pool.max_candidates - totalAfterAdding;
+        toast.warning(
+          `Achtung: Pool ist fast voll! Nach dem Hinzufügen sind noch ${remaining} Plätze verfügbar.`
+        );
+      }
+    }
+
     try {
-      // Get current user for added_by field
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error("Benutzer nicht authentifiziert");
@@ -646,7 +697,6 @@ export default function PoolDetailPage() {
 
       toast.success(`${selectedCandidates.size} Kandidat(en) erfolgreich zum Pool hinzugefügt`);
       
-      // Reset form and close dialog
       setSelectedCandidates(new Set());
       setAddCandidateForm({
         priority: 0,
@@ -656,7 +706,6 @@ export default function PoolDetailPage() {
       setCandidateSearchTerm("");
       setAddingCandidates(false);
       
-      // Reload data
       loadCandidates();
       loadStats();
       
@@ -678,7 +727,7 @@ export default function PoolDetailPage() {
 
   function getFilteredAvailableCandidates() {
     return availableCandidates.filter(candidate => {
-      if (candidate.isInPool) return false; // Don't show candidates already in pool
+      if (candidate.isInPool) return false;
       if (!candidateSearchTerm) return true;
       
       const searchLower = candidateSearchTerm.toLowerCase();
@@ -698,7 +747,6 @@ export default function PoolDetailPage() {
     }
 
     try {
-      // Get current user for granted_by field
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error("Benutzer nicht authentifiziert");
@@ -730,7 +778,6 @@ export default function PoolDetailPage() {
       });
       setCompanySearchTerm("");
       
-      // Reload data
       loadCompanyAccess();
       loadAvailableCompanies();
     } catch (error) {
@@ -751,7 +798,7 @@ export default function PoolDetailPage() {
 
   function getFilteredAvailableCompanies() {
     return availableCompanies.filter(company => {
-      if (company.hasAccess) return false; // Don't show companies already with access
+      if (company.hasAccess) return false;
       if (!companySearchTerm) return true;
       
       const searchLower = companySearchTerm.toLowerCase();
@@ -761,6 +808,66 @@ export default function PoolDetailPage() {
         company.location?.toLowerCase().includes(searchLower)
       );
     });
+  }
+
+  function handleEditCompanyAccess(companyAccess: CompanyAccess) {
+    setEditingCompanyAccess(companyAccess);
+    setEditCompanyForm({
+      access_level: companyAccess.access_level,
+      expires_at: companyAccess.expires_at ? companyAccess.expires_at.split('T')[0] : "",
+      notes: companyAccess.notes || ""
+    });
+  }
+
+  async function handleUpdateCompanyAccess() {
+    if (!editingCompanyAccess) return;
+
+    try {
+      const { error } = await supabase
+        .from("pool_company_access")
+        .update({
+          access_level: editCompanyForm.access_level,
+          expires_at: editCompanyForm.expires_at || null,
+          notes: editCompanyForm.notes || null
+        })
+        .eq("id", editingCompanyAccess.id);
+
+      if (error) throw error;
+
+      toast.success("Zugriffsberechtigung erfolgreich aktualisiert");
+      setEditingCompanyAccess(null);
+      setEditCompanyForm({
+        access_level: "view",
+        expires_at: "",
+        notes: ""
+      });
+      
+      // Reload data
+      loadCompanyAccess();
+    } catch (error) {
+      console.error("Error updating company access:", error);
+      toast.error("Fehler beim Aktualisieren der Zugriffsberechtigung");
+    }
+  }
+
+  async function handleRemoveCompanyAccess(accessId: string) {
+    if (!window.confirm("Möchten Sie den Zugang für dieses Unternehmen entfernen?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("pool_company_access")
+        .delete()
+        .eq("id", accessId);
+
+      if (error) throw error;
+
+      toast.success("Unternehmenszugang entfernt");
+      loadCompanyAccess();
+      loadAvailableCompanies();
+    } catch (error) {
+      console.error("Error removing company access:", error);
+      toast.error("Fehler beim Entfernen des Unternehmenszugangs");
+    }
   }
 
   function getStatusBadge(status: "active" | "inactive" | "archived") {
@@ -952,6 +1059,34 @@ export default function PoolDetailPage() {
         ) : (
           <span className="text-muted-foreground">Nie</span>
         )
+      ),
+    },
+    {
+      id: "actions",
+      header: "Aktionen",
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <IconSettings className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem 
+              onClick={() => handleEditCompanyAccess(row.original)}
+            >
+              <IconEdit className="h-4 w-4 mr-2" />
+              Berechtigung bearbeiten
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              className="text-destructive"
+              onClick={() => handleRemoveCompanyAccess(row.original.id)}
+            >
+              <IconTrash className="h-4 w-4 mr-2" />
+              Zugang entfernen
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ),
     },
   ];
@@ -1437,21 +1572,25 @@ export default function PoolDetailPage() {
 
         {/* Edit Pool Dialog */}
         <Dialog open={editingPool} onOpenChange={setEditingPool}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Pool bearbeiten</DialogTitle>
               <DialogDescription>
                 Bearbeite die Einstellungen für {pool.name}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 pr-2">
               <div className="space-y-2">
-                <Label htmlFor="edit-name">Pool-Name</Label>
+                <Label htmlFor="edit-name">Pool-Name *</Label>
                 <Input
                   id="edit-name"
                   value={editForm.name}
                   onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Pool-Name eingeben..."
                 />
+                {!editForm.name.trim() && (
+                  <p className="text-sm text-red-600">Pool-Name ist erforderlich</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -1461,18 +1600,78 @@ export default function PoolDetailPage() {
                   className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={editForm.description}
                   onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Optionale Beschreibung des Pools..."
                   rows={3}
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="edit-max-candidates">Maximale Kandidatenanzahl</Label>
-                <Input
-                  id="edit-max-candidates"
-                  type="number"
-                  value={editForm.max_candidates}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, max_candidates: e.target.value }))}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-max-candidates">Maximale Kandidatenanzahl</Label>
+                  <Input
+                    id="edit-max-candidates"
+                    type="number"
+                    min="0"
+                    value={editForm.max_candidates}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, max_candidates: e.target.value }))}
+                    placeholder="Kein Limit (leer lassen)"
+                  />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <IconUsers className="h-4 w-4" />
+                    <span>Aktuell {candidates.length} Kandidaten im Pool</span>
+                  </div>
+                  {editForm.max_candidates && parseInt(editForm.max_candidates) < candidates.length && (
+                    <p className="text-sm text-red-600">
+                      ⚠️ Neues Limit ({editForm.max_candidates}) ist kleiner als aktuelle Kandidaten ({candidates.length})
+                    </p>
+                  )}
+                  {editForm.max_candidates && parseInt(editForm.max_candidates) >= candidates.length && (
+                    <p className="text-sm text-green-600">
+                      ✅ Limit ist ausreichend für aktuelle Kandidaten
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-pool-type">Pool-Typ</Label>
+                    <Select
+                      value={editForm.pool_type}
+                      onValueChange={(value: "main" | "custom" | "featured" | "premium") => 
+                        setEditForm(prev => ({ ...prev, pool_type: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="main">Hauptpool</SelectItem>
+                        <SelectItem value="custom">Custom Pool</SelectItem>
+                        <SelectItem value="featured">Featured Pool</SelectItem>
+                        <SelectItem value="premium">Premium Pool</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-status">Pool-Status</Label>
+                    <Select
+                      value={editForm.status}
+                      onValueChange={(value: "active" | "inactive" | "archived") => 
+                        setEditForm(prev => ({ ...prev, status: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Aktiv</SelectItem>
+                        <SelectItem value="inactive">Inaktiv</SelectItem>
+                        <SelectItem value="archived">Archiviert</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -1488,13 +1687,144 @@ export default function PoolDetailPage() {
                 />
               </div>
 
-              <div className="flex justify-end gap-2">
+              {/* Current Pool Info */}
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <h4 className="font-medium text-sm">Aktuelle Pool-Informationen:</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Erstellt:</span>
+                    <div>{new Date(pool.created_at).toLocaleDateString("de-DE")}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Erstellt von:</span>
+                    <div>{pool.created_by_name || "Unbekannt"}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Kandidaten:</span>
+                    <div>{candidates.length} {pool.max_candidates ? `/ ${pool.max_candidates}` : "(unbegrenzt)"}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Unternehmen:</span>
+                    <div>{companies.length} mit Zugang</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
                 <Button variant="outline" onClick={() => setEditingPool(false)}>
                   Abbrechen
                 </Button>
-                <Button onClick={handleSavePool}>
+                <Button 
+                  onClick={handleSavePool}
+                  disabled={!editForm.name.trim() || (!!editForm.max_candidates && parseInt(editForm.max_candidates) < candidates.length)}
+                >
                   <IconDeviceFloppy className="h-4 w-4 mr-2" />
-                  Speichern
+                  Änderungen speichern
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Company Access Dialog */}
+        <Dialog open={!!editingCompanyAccess} onOpenChange={(open) => !open && setEditingCompanyAccess(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Zugriffsberechtigung bearbeiten</DialogTitle>
+              <DialogDescription>
+                Bearbeite die Zugriffsrechte für {editingCompanyAccess?.company_name}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-access-level">Zugriffslevel</Label>
+                <Select
+                  value={editCompanyForm.access_level}
+                  onValueChange={(value: "view" | "select" | "contact") => 
+                    setEditCompanyForm(prev => ({ ...prev, access_level: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="view">
+                      <div className="flex flex-col">
+                        <span>Anzeigen</span>
+                        <span className="text-xs text-muted-foreground">Nur Pool-Kandidaten ansehen</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="select">
+                      <div className="flex flex-col">
+                        <span>Auswählen</span>
+                        <span className="text-xs text-muted-foreground">Kandidaten ansehen und auswählen</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="contact">
+                      <div className="flex flex-col">
+                        <span>Kontaktieren</span>
+                        <span className="text-xs text-muted-foreground">Kandidaten ansehen, auswählen und kontaktieren</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-expires-at">Zugang läuft ab (optional)</Label>
+                <Input
+                  id="edit-expires-at"
+                  type="date"
+                  value={editCompanyForm.expires_at}
+                  onChange={(e) => setEditCompanyForm(prev => ({ 
+                    ...prev, 
+                    expires_at: e.target.value 
+                  }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leer lassen für unbegrenzten Zugang
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-company-notes">Notizen</Label>
+                <textarea
+                  id="edit-company-notes"
+                  className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Optionale Notizen..."
+                  value={editCompanyForm.notes}
+                  onChange={(e) => setEditCompanyForm(prev => ({ 
+                    ...prev, 
+                    notes: e.target.value 
+                  }))}
+                  rows={2}
+                />
+              </div>
+
+              {/* Current Info */}
+              <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                <div className="font-medium mb-2">Aktuelle Informationen:</div>
+                <div className="space-y-1">
+                  <div>
+                    <span className="text-muted-foreground">Zugewiesen am:</span> {editingCompanyAccess ? new Date(editingCompanyAccess.assigned_at).toLocaleDateString("de-DE") : ""}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Zugewiesen von:</span> {editingCompanyAccess?.assigned_by_name || "Unbekannt"}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Bisherige Auswahlen:</span> {editingCompanyAccess?.selection_count || 0}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setEditingCompanyAccess(null)}>
+                  Abbrechen
+                </Button>
+                <Button onClick={handleUpdateCompanyAccess}>
+                  <IconDeviceFloppy className="h-4 w-4 mr-2" />
+                  Änderungen speichern
                 </Button>
               </div>
             </div>

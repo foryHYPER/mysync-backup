@@ -17,9 +17,14 @@ import {
   IconStar,
   IconEye,
   IconHeart,
-  IconHeartFilled,
   IconFilter,
-  IconSearch
+  IconSearch,
+  IconCalendar,
+  IconTrendingUp,
+  IconAward,
+  IconClock,
+  IconChevronRight,
+  IconAlertTriangle
 } from "@tabler/icons-react";
 import {
   Select,
@@ -29,13 +34,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 type AssignedPool = {
   id: string;
@@ -45,48 +48,47 @@ type AssignedPool = {
   pool_type: "main" | "custom" | "featured" | "premium";
   access_level: "view" | "select" | "contact";
   candidate_count: number;
+  max_candidates?: number;
   assigned_at: string;
   expires_at?: string;
   selection_count: number;
+  utilization?: number;
+  featured_candidates?: number;
+  last_accessed?: string;
 };
 
-type PoolCandidate = {
-  id: string;
-  candidate_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  skills: string[];
-  priority: number;
-  featured: boolean;
-  assigned_at: string;
-  isSelected: boolean;
-  selectionType?: "interested" | "shortlisted" | "contacted" | "rejected";
-  rating?: number;
+type PoolStats = {
+  totalPools: number;
+  totalCandidates: number;
+  totalSelections: number;
+  averageUtilization: number;
+  expiringPools: number;
+  featuredPools: number;
+  accessLevelDistribution: { level: string; count: number }[];
+  poolTypeDistribution: { type: string; count: number }[];
 };
 
 export default function CompanyPoolsPage() {
   const [assignedPools, setAssignedPools] = useState<AssignedPool[]>([]);
-  const [selectedPool, setSelectedPool] = useState<AssignedPool | null>(null);
-  const [poolCandidates, setPoolCandidates] = useState<PoolCandidate[]>([]);
-  const [filteredCandidates, setFilteredCandidates] = useState<PoolCandidate[]>([]);
+  const [filteredPools, setFilteredPools] = useState<AssignedPool[]>([]);
+  const [stats, setStats] = useState<PoolStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [skillFilter, setSkillFilter] = useState<string>("all");
-  const [selectionFilter, setSelectionFilter] = useState<string>("all");
-  const [viewingCandidates, setViewingCandidates] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [accessFilter, setAccessFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("name");
   const profile = useProfile();
   const supabase = createClient();
 
   useEffect(() => {
-    if (profile?.company_id) {
+    if (profile?.id) {
       loadAssignedPools();
     }
-  }, [profile]);
+  }, [profile?.id]);
 
   useEffect(() => {
-    filterCandidates();
-  }, [poolCandidates, searchTerm, skillFilter, selectionFilter]);
+    filterPools();
+  }, [assignedPools, searchTerm, typeFilter, accessFilter]);
 
   async function loadAssignedPools() {
     try {
@@ -101,47 +103,77 @@ export default function CompanyPoolsPage() {
             id,
             name,
             description,
-            pool_type
+            pool_type,
+            max_candidates
           )
         `)
-        .eq("company_id", profile?.company_id)
+        .eq("company_id", profile?.id)
         .order("granted_at", { ascending: false });
 
       if (accessError) throw accessError;
 
       if (poolAccess) {
-        // Get candidate counts and selection counts for each pool
+        // Get pool details and candidate counts for each pool access
         const enrichedPools = await Promise.all(
           poolAccess.map(async (access) => {
-            // Get candidate count
-            const { count: candidateCount } = await supabase
-              .from("pool_candidates")
-              .select("*", { count: "exact", head: true })
-              .eq("pool_id", access.pool_id);
+            try {
+              if (!access.pool) {
+                console.warn(`Pool with ID ${access.pool_id} not found, skipping...`);
+                return null;
+              }
 
-            // Get selection count for this company
-            const { count: selectionCount } = await supabase
-              .from("candidate_selections")
-              .select("*", { count: "exact", head: true })
-              .eq("company_id", profile?.company_id)
-              .eq("pool_id", access.pool_id);
+              // Get candidate count
+              const { count: candidateCount } = await supabase
+                .from("pool_candidates")
+                .select("*", { count: "exact", head: true })
+                .eq("pool_id", access.pool_id);
 
-            return {
-              id: access.id,
-              pool_id: access.pool_id,
-              pool_name: access.pool?.name || "Unbekannt",
-              pool_description: access.pool?.description,
-              pool_type: access.pool?.pool_type || "custom",
-              access_level: access.access_level,
-              candidate_count: candidateCount || 0,
-              assigned_at: access.granted_at,
-              expires_at: access.expires_at,
-              selection_count: selectionCount || 0
-            } as AssignedPool;
+              // Get featured candidates count
+              const { count: featuredCount } = await supabase
+                .from("pool_candidates")
+                .select("*", { count: "exact", head: true })
+                .eq("pool_id", access.pool_id)
+                .eq("featured", true);
+
+              // Get selection count for this company
+              const { count: selectionCount } = await supabase
+                .from("candidate_selections")
+                .select("*", { count: "exact", head: true })
+                .eq("company_id", profile?.id)
+                .eq("pool_id", access.pool_id);
+
+              // Calculate utilization if max_candidates is set
+              const utilization = access.pool.max_candidates 
+                ? Math.round((candidateCount || 0) / access.pool.max_candidates * 100)
+                : undefined;
+
+              return {
+                id: access.id,
+                pool_id: access.pool_id,
+                pool_name: access.pool.name,
+                pool_description: access.pool.description,
+                pool_type: access.pool.pool_type || "custom",
+                access_level: access.access_level,
+                candidate_count: candidateCount || 0,
+                max_candidates: access.pool.max_candidates,
+                assigned_at: access.granted_at,
+                expires_at: access.expires_at,
+                selection_count: selectionCount || 0,
+                utilization,
+                featured_candidates: featuredCount || 0,
+                last_accessed: access.granted_at
+              } as AssignedPool;
+            } catch (error) {
+              console.error(`Error processing pool ${access.pool_id}:`, error);
+              return null;
+            }
           })
         );
 
-        setAssignedPools(enrichedPools);
+        // Filter out null values (failed pool loads)
+        const validPools = enrichedPools.filter(pool => pool !== null) as AssignedPool[];
+        setAssignedPools(validPools);
+        calculateStats(validPools);
       }
     } catch (error) {
       console.error("Error loading assigned pools:", error);
@@ -151,138 +183,98 @@ export default function CompanyPoolsPage() {
     }
   }
 
-  async function loadPoolCandidates(pool: AssignedPool) {
-    try {
-      const { data: assignments, error: assignmentsError } = await supabase
-        .from("pool_candidates")
-        .select(`
-          *,
-          candidate:candidates(
-            id,
-            first_name,
-            last_name,
-            email,
-            skills
-          )
-        `)
-        .eq("pool_id", pool.pool_id)
-        .order("priority", { ascending: false });
+  function calculateStats(pools: AssignedPool[]) {
+    const totalPools = pools.length;
+    const totalCandidates = pools.reduce((sum, pool) => sum + pool.candidate_count, 0);
+    const totalSelections = pools.reduce((sum, pool) => sum + pool.selection_count, 0);
+    
+    // Calculate average utilization (only for pools with limits)
+    const poolsWithLimits = pools.filter(p => p.max_candidates);
+    const averageUtilization = poolsWithLimits.length > 0
+      ? Math.round(poolsWithLimits.reduce((sum, pool) => sum + (pool.utilization || 0), 0) / poolsWithLimits.length)
+      : 0;
 
-      if (assignmentsError) throw assignmentsError;
+    // Count expiring pools (within 30 days)
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    const expiringPools = pools.filter(pool => 
+      pool.expires_at && 
+      new Date(pool.expires_at) <= thirtyDaysFromNow
+    ).length;
 
-      if (assignments) {
-        // Get existing selections for this company
-        const { data: selections, error: selectionsError } = await supabase
-          .from("candidate_selections")
-          .select("candidate_id, selection_type, rating")
-          .eq("company_id", profile?.company_id)
-          .eq("pool_id", pool.pool_id);
+    const featuredPools = pools.filter(pool => pool.pool_type === "featured").length;
 
-        if (selectionsError) throw selectionsError;
+    // Access level distribution
+    const accessLevelDistribution = [
+      { level: "Anzeigen", count: pools.filter(p => p.access_level === "view").length },
+      { level: "Auswählen", count: pools.filter(p => p.access_level === "select").length },
+      { level: "Kontaktieren", count: pools.filter(p => p.access_level === "contact").length }
+    ].filter(item => item.count > 0);
 
-        const selectionsMap = new Map(
-          selections?.map(s => [s.candidate_id, { type: s.selection_type, rating: s.rating }]) || []
-        );
+    // Pool type distribution
+    const poolTypeDistribution = [
+      { type: "Hauptpool", count: pools.filter(p => p.pool_type === "main").length },
+      { type: "Featured", count: pools.filter(p => p.pool_type === "featured").length },
+      { type: "Premium", count: pools.filter(p => p.pool_type === "premium").length },
+      { type: "Custom", count: pools.filter(p => p.pool_type === "custom").length }
+    ].filter(item => item.count > 0);
 
-        const enrichedCandidates = assignments.map(assignment => {
-          const selection = selectionsMap.get(assignment.candidate_id);
-          return {
-            id: assignment.id,
-            candidate_id: assignment.candidate_id,
-            first_name: assignment.candidate?.first_name || "",
-            last_name: assignment.candidate?.last_name || "",
-            email: assignment.candidate?.email || "",
-            current_position: undefined,
-            skills: Array.isArray(assignment.candidate?.skills) ? assignment.candidate.skills : [],
-            priority: assignment.priority,
-            featured: assignment.featured,
-            assigned_at: assignment.added_at,
-            isSelected: !!selection,
-            selectionType: selection?.type,
-            rating: selection?.rating
-          } as PoolCandidate;
-        });
-
-        setPoolCandidates(enrichedCandidates);
-      }
-    } catch (error) {
-      console.error("Error loading pool candidates:", error);
-      toast.error("Fehler beim Laden der Kandidaten");
-    }
+    setStats({
+      totalPools,
+      totalCandidates,
+      totalSelections,
+      averageUtilization,
+      expiringPools,
+      featuredPools,
+      accessLevelDistribution,
+      poolTypeDistribution
+    });
   }
 
-  function filterCandidates() {
-    let filtered = poolCandidates;
+  function filterPools() {
+    let filtered = assignedPools;
 
+    // Search filter
     if (searchTerm) {
-      filtered = filtered.filter(candidate => 
-        candidate.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        candidate.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        candidate.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        candidate.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()))
+      filtered = filtered.filter(pool =>
+        pool.pool_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        pool.pool_description?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    if (skillFilter !== "all") {
-      filtered = filtered.filter(candidate => 
-        candidate.skills.some(skill => skill.toLowerCase().includes(skillFilter.toLowerCase()))
-      );
+    // Type filter
+    if (typeFilter !== "all") {
+      filtered = filtered.filter(pool => pool.pool_type === typeFilter);
     }
 
-    if (selectionFilter !== "all") {
-      if (selectionFilter === "selected") {
-        filtered = filtered.filter(candidate => candidate.isSelected);
-      } else if (selectionFilter === "unselected") {
-        filtered = filtered.filter(candidate => !candidate.isSelected);
-      } else {
-        filtered = filtered.filter(candidate => candidate.selectionType === selectionFilter);
-      }
+    // Access filter
+    if (accessFilter !== "all") {
+      filtered = filtered.filter(pool => pool.access_level === accessFilter);
     }
 
-    setFilteredCandidates(filtered);
-  }
-
-  async function handleCandidateSelection(candidate: PoolCandidate, selectionType: "interested" | "shortlisted" | "rejected") {
-    try {
-      if (candidate.isSelected) {
-        // Update existing selection
-        const { error } = await supabase
-          .from("candidate_selections")
-          .update({ 
-            selection_type: selectionType,
-            updated_at: new Date().toISOString()
-          })
-          .eq("company_id", profile?.company_id)
-          .eq("candidate_id", candidate.candidate_id)
-          .eq("pool_id", selectedPool?.pool_id);
-
-        if (error) throw error;
-      } else {
-        // Create new selection
-        const { error } = await supabase
-          .from("candidate_selections")
-          .insert({
-            company_id: profile?.company_id,
-            candidate_id: candidate.candidate_id,
-            pool_id: selectedPool?.pool_id,
-            selected_by: profile?.id,
-            selection_type: selectionType
-          });
-
-        if (error) throw error;
+    // Sort
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "name":
+          return a.pool_name.localeCompare(b.pool_name);
+        case "candidates":
+          return b.candidate_count - a.candidate_count;
+        case "selections":
+          return b.selection_count - a.selection_count;
+        case "access_level":
+          const accessOrder = { "contact": 3, "select": 2, "view": 1 };
+          return (accessOrder[b.access_level] || 0) - (accessOrder[a.access_level] || 0);
+        case "expires":
+          if (!a.expires_at && !b.expires_at) return 0;
+          if (!a.expires_at) return 1;
+          if (!b.expires_at) return -1;
+          return new Date(a.expires_at).getTime() - new Date(b.expires_at).getTime();
+        default:
+          return 0;
       }
+    });
 
-      toast.success("Auswahl aktualisiert");
-      
-      // Reload candidates to reflect changes
-      if (selectedPool) {
-        loadPoolCandidates(selectedPool);
-      }
-      
-    } catch (error) {
-      console.error("Error updating candidate selection:", error);
-      toast.error("Fehler beim Aktualisieren der Auswahl");
-    }
+    setFilteredPools(filtered);
   }
 
   function getPoolTypeBadge(type: AssignedPool["pool_type"]) {
@@ -313,55 +305,73 @@ export default function CompanyPoolsPage() {
     }
   }
 
-  function getSelectionBadge(candidate: PoolCandidate) {
-    if (!candidate.isSelected) return null;
-    
-    switch (candidate.selectionType) {
-      case "interested":
-        return <Badge variant="default" className="bg-green-600">Interessiert</Badge>;
-      case "shortlisted":
-        return <Badge variant="default" className="bg-blue-600">Shortlist</Badge>;
-      case "contacted":
-        return <Badge variant="default" className="bg-purple-600">Kontaktiert</Badge>;
-      case "rejected":
-        return <Badge variant="destructive">Abgelehnt</Badge>;
-      default:
-        return <Badge variant="secondary">Ausgewählt</Badge>;
-    }
+  function getUtilizationColor(utilization?: number) {
+    if (!utilization) return "text-muted-foreground";
+    if (utilization >= 90) return "text-red-600";
+    if (utilization >= 80) return "text-orange-600";
+    if (utilization >= 60) return "text-yellow-600";
+    return "text-green-600";
   }
 
   const poolColumns: ColumnDef<AssignedPool>[] = [
     {
       accessorKey: "pool_name",
-      header: "Pool-Name",
+      header: "Pool",
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span className="font-medium">{row.original.pool_name}</span>
+        <div>
+          <div className="font-medium">{row.original.pool_name}</div>
+          <div className="flex items-center gap-2 mt-1">
+            {getPoolTypeBadge(row.original.pool_type)}
+            {getAccessLevelBadge(row.original.access_level)}
+          </div>
           {row.original.pool_description && (
-            <span className="text-sm text-muted-foreground truncate max-w-xs">
+            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
               {row.original.pool_description}
-            </span>
+            </p>
           )}
         </div>
       ),
     },
     {
-      accessorKey: "pool_type",
-      header: "Typ",
-      cell: ({ row }) => getPoolTypeBadge(row.original.pool_type),
-    },
-    {
-      accessorKey: "access_level",
-      header: "Zugriffslevel",
-      cell: ({ row }) => getAccessLevelBadge(row.original.access_level),
-    },
-    {
       accessorKey: "candidate_count",
       header: "Kandidaten",
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <IconUsers className="h-4 w-4 text-muted-foreground" />
-          <span className="font-medium">{row.original.candidate_count}</span>
+        <div>
+          <div className="flex items-center gap-2">
+            <IconUsers className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">{row.original.candidate_count}</span>
+            {row.original.max_candidates && (
+              <span className="text-muted-foreground">/ {row.original.max_candidates}</span>
+            )}
+          </div>
+          {row.original.utilization && (
+            <div className="mt-1">
+              <div className="flex items-center gap-2">
+                <div className="w-20 bg-secondary rounded-full h-2">
+                  <div 
+                    className={`h-2 rounded-full ${
+                      row.original.utilization >= 90 ? 'bg-red-500' :
+                      row.original.utilization >= 80 ? 'bg-orange-500' :
+                      row.original.utilization >= 60 ? 'bg-yellow-500' :
+                      'bg-green-500'
+                    }`}
+                    style={{ width: `${Math.min(row.original.utilization, 100)}%` }}
+                  />
+                </div>
+                <span className={`text-xs ${getUtilizationColor(row.original.utilization)}`}>
+                  {row.original.utilization}%
+                </span>
+              </div>
+            </div>
+          )}
+          {(row.original.featured_candidates || 0) > 0 && (
+            <div className="flex items-center gap-1 mt-1">
+              <IconStar className="h-3 w-3 text-yellow-500" />
+              <span className="text-xs text-muted-foreground">
+                {row.original.featured_candidates} Featured
+              </span>
+            </div>
+          )}
         </div>
       ),
     },
@@ -370,111 +380,65 @@ export default function CompanyPoolsPage() {
       header: "Meine Auswahlen",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <IconHeart className="h-4 w-4 text-muted-foreground" />
-          <span>{row.original.selection_count}</span>
+          <IconHeart className="h-4 w-4 text-red-500" />
+          <span className="font-medium">{row.original.selection_count}</span>
         </div>
       ),
     },
     {
-      accessorKey: "assigned_at",
-      header: "Zugewiesenen",
-      cell: ({ row }) => (
-        <span className="text-sm">
-          {new Date(row.original.assigned_at).toLocaleDateString("de-DE")}
-        </span>
-      ),
+      accessorKey: "expires_at",
+      header: "Zugang",
+      cell: ({ row }) => {
+        if (!row.original.expires_at) {
+          return (
+            <div className="flex items-center gap-2">
+              <IconCalendar className="h-4 w-4 text-green-600" />
+              <span className="text-green-600">Unbegrenzt</span>
+            </div>
+          );
+        }
+        
+        const expiryDate = new Date(row.original.expires_at);
+        const now = new Date();
+        const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        
+        return (
+          <div>
+            <div className="flex items-center gap-2">
+              <IconCalendar className="h-4 w-4 text-muted-foreground" />
+              <span className={daysUntilExpiry <= 7 ? "text-red-600 font-medium" : ""}>
+                {expiryDate.toLocaleDateString("de-DE")}
+              </span>
+            </div>
+            {daysUntilExpiry <= 30 && daysUntilExpiry > 0 && (
+              <div className="flex items-center gap-1 mt-1">
+                <IconAlertTriangle className="h-3 w-3 text-orange-500" />
+                <span className="text-xs text-orange-600">
+                  {daysUntilExpiry} Tage verbleibend
+                </span>
+              </div>
+            )}
+            {daysUntilExpiry <= 0 && (
+              <Badge variant="destructive" className="text-xs mt-1">
+                Abgelaufen
+              </Badge>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: "actions",
       header: "Aktionen",
       cell: ({ row }) => (
         <Link href={`/dashboard/company/pools/${row.original.pool_id}`}>
-          <Button size="sm">
+          <Button variant="outline" size="sm">
             <IconEye className="h-4 w-4 mr-2" />
-            Pool durchsuchen
+            Pool öffnen
+            <IconChevronRight className="h-4 w-4 ml-2" />
           </Button>
         </Link>
       ),
-    },
-  ];
-
-  const candidateColumns: ColumnDef<PoolCandidate>[] = [
-    {
-      accessorKey: "name",
-      header: "Kandidat",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col">
-            <div className="flex items-center gap-2">
-              <span className="font-medium">
-                {row.original.first_name} {row.original.last_name}
-              </span>
-              {row.original.featured && (
-                <IconStar className="h-4 w-4 text-yellow-500 fill-current" />
-              )}
-            </div>
-            <span className="text-sm text-muted-foreground">{row.original.email}</span>
-          </div>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "skills",
-      header: "Skills",
-      cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
-          {row.original.skills.slice(0, 3).map((skill, index) => (
-            <Badge key={index} variant="outline" className="text-xs">
-              {skill}
-            </Badge>
-          ))}
-          {row.original.skills.length > 3 && (
-            <Badge variant="outline" className="text-xs">
-              +{row.original.skills.length - 3}
-            </Badge>
-          )}
-        </div>
-      ),
-    },
-    {
-      accessorKey: "selection",
-      header: "Status",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          {getSelectionBadge(row.original)}
-          {!row.original.isSelected && (
-            <Badge variant="outline" className="text-xs">Neu</Badge>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: "actions",
-      header: "Aktionen",
-      cell: ({ row }) => {
-        if (selectedPool?.access_level === "view") {
-          return <span className="text-sm text-muted-foreground">Nur Ansicht</span>;
-        }
-        
-        return (
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant={row.original.selectionType === "interested" ? "default" : "outline"}
-              onClick={() => handleCandidateSelection(row.original, "interested")}
-            >
-              <IconHeart className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant={row.original.selectionType === "shortlisted" ? "default" : "outline"}
-              onClick={() => handleCandidateSelection(row.original, "shortlisted")}
-            >
-              <IconStar className="h-4 w-4" />
-            </Button>
-          </div>
-        );
-      },
     },
   ];
 
@@ -483,8 +447,7 @@ export default function CompanyPoolsPage() {
       <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="px-4 lg:px-6">
           <div className="space-y-2 mb-6">
-            <h1 className="text-3xl font-bold tracking-tight">Kandidaten-Pools</h1>
-            <p className="text-muted-foreground">Lade verfügbare Pools...</p>
+            <h1 className="text-3xl font-bold tracking-tight">Pools werden geladen...</h1>
           </div>
         </div>
       </div>
@@ -495,133 +458,295 @@ export default function CompanyPoolsPage() {
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6">
         {/* Header */}
-        <div className="space-y-2 mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">Kandidaten-Pools</h1>
-          <p className="text-muted-foreground">
-            Durchsuchen Sie die Ihnen zugewiesenen Kandidaten-Pools und wählen Sie interessante Kandidaten aus
-          </p>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Kandidaten-Pools</h1>
+            <p className="text-muted-foreground">
+              Ihre verfügbaren Pools und deren Kandidaten
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => loadAssignedPools()}>
+              <IconTrendingUp className="h-4 w-4 mr-2" />
+              Aktualisieren
+            </Button>
+          </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid gap-4 md:grid-cols-4 mb-6">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Verfügbare Pools</p>
-                  <p className="text-2xl font-bold">{assignedPools.length}</p>
+        {/* Statistics Cards */}
+        {stats && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Verfügbare Pools</p>
+                    <p className="text-2xl font-bold">{stats.totalPools}</p>
+                  </div>
+                  <IconSwimming className="h-8 w-8 text-blue-600" />
                 </div>
-                <IconSwimming className="h-8 w-8 text-blue-600" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Gesamt Kandidaten</p>
-                  <p className="text-2xl font-bold">
-                    {assignedPools.reduce((sum, pool) => sum + pool.candidate_count, 0)}
-                  </p>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Gesamt Kandidaten</p>
+                    <p className="text-2xl font-bold">{stats.totalCandidates}</p>
+                  </div>
+                  <IconUsers className="h-8 w-8 text-green-600" />
                 </div>
-                <IconUsers className="h-8 w-8 text-green-600" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Meine Auswahlen</p>
-                  <p className="text-2xl font-bold">
-                    {assignedPools.reduce((sum, pool) => sum + pool.selection_count, 0)}
-                  </p>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Meine Auswahlen</p>
+                    <p className="text-2xl font-bold">{stats.totalSelections}</p>
+                  </div>
+                  <IconHeart className="h-8 w-8 text-red-600" />
                 </div>
-                <IconHeart className="h-8 w-8 text-red-600" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Premium Pools</p>
-                  <p className="text-2xl font-bold">
-                    {assignedPools.filter(p => p.pool_type === "premium" || p.pool_type === "featured").length}
-                  </p>
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Featured Pools</p>
+                    <p className="text-2xl font-bold">{stats.featuredPools}</p>
+                    {stats.expiringPools > 0 && (
+                      <p className="text-xs text-orange-600">
+                        {stats.expiringPools} laufen bald ab
+                      </p>
+                    )}
+                  </div>
+                  <IconAward className="h-8 w-8 text-purple-600" />
                 </div>
-                <IconStar className="h-8 w-8 text-yellow-600" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-        {/* Pools Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Zugewiesene Pools</CardTitle>
-            <CardDescription>
-              Pools, auf die Sie Zugriff haben ({assignedPools.length} Pools)
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DataTable 
-              columns={poolColumns} 
-              data={assignedPools}
-            />
-          </CardContent>
-        </Card>
+        {/* Content Tabs */}
+        <Tabs defaultValue="pools" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="pools">
+              <IconSwimming className="h-4 w-4 mr-2" />
+              Pool-Übersicht ({filteredPools.length})
+            </TabsTrigger>
+            <TabsTrigger value="analytics">
+              <IconTrendingUp className="h-4 w-4 mr-2" />
+              Analytics
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Candidates Dialog */}
-        <Dialog open={viewingCandidates} onOpenChange={setViewingCandidates}>
-          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                Kandidaten in {selectedPool?.pool_name}
-              </DialogTitle>
-              <DialogDescription>
-                {selectedPool?.pool_description}
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              {/* Filters */}
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <IconFilter className="h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Kandidaten suchen..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-64"
+          <TabsContent value="pools">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Ihre Pools</CardTitle>
+                    <CardDescription>
+                      Verwalten Sie Ihre Zugriffe auf Kandidaten-Pools
+                    </CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Filters */}
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                  <div className="flex items-center gap-2 flex-1">
+                    <IconSearch className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Pool suchen..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="flex-1"
+                    />
+                  </div>
+                  
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Pool-Typ" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Alle Typen</SelectItem>
+                      <SelectItem value="main">Hauptpool</SelectItem>
+                      <SelectItem value="featured">Featured</SelectItem>
+                      <SelectItem value="premium">Premium</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={accessFilter} onValueChange={setAccessFilter}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Zugriff" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Alle Zugriffe</SelectItem>
+                      <SelectItem value="view">Anzeigen</SelectItem>
+                      <SelectItem value="select">Auswählen</SelectItem>
+                      <SelectItem value="contact">Kontaktieren</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Sortieren" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name">Name</SelectItem>
+                      <SelectItem value="candidates">Kandidaten</SelectItem>
+                      <SelectItem value="selections">Auswahlen</SelectItem>
+                      <SelectItem value="access_level">Zugriffslevel</SelectItem>
+                      <SelectItem value="expires">Ablaufdatum</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Pools Table */}
+                {filteredPools.length > 0 ? (
+                  <DataTable 
+                    columns={poolColumns} 
+                    data={filteredPools}
                   />
-                </div>
-                <Select value={selectionFilter} onValueChange={setSelectionFilter}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder="Status filtern" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Alle</SelectItem>
-                    <SelectItem value="unselected">Noch nicht ausgewählt</SelectItem>
-                    <SelectItem value="selected">Ausgewählt</SelectItem>
-                    <SelectItem value="interested">Interessiert</SelectItem>
-                    <SelectItem value="shortlisted">Shortlist</SelectItem>
-                    <SelectItem value="rejected">Abgelehnt</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <IconSwimming className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">
+                      {searchTerm || typeFilter !== "all" || accessFilter !== "all" 
+                        ? "Keine Pools gefunden" 
+                        : "Keine Pools verfügbar"
+                      }
+                    </h3>
+                    <p className="text-muted-foreground mb-4">
+                      {searchTerm || typeFilter !== "all" || accessFilter !== "all"
+                        ? "Versuchen Sie, Ihre Filter zu ändern oder zu entfernen."
+                        : "Sie haben noch keinen Zugriff auf Kandidaten-Pools."
+                      }
+                    </p>
+                    {!(searchTerm || typeFilter !== "all" || accessFilter !== "all") && (
+                      <Button variant="outline">
+                        Administrator kontaktieren
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              {/* Candidates Table */}
-              <DataTable 
-                columns={candidateColumns} 
-                data={filteredCandidates}
-              />
+          <TabsContent value="analytics">
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Access Level Distribution */}
+              {stats && stats.accessLevelDistribution.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Zugriffslevel-Verteilung</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {stats.accessLevelDistribution.map((item, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <span className="text-sm">{item.level}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-24 bg-secondary rounded-full h-2">
+                              <div 
+                                className="bg-primary h-2 rounded-full" 
+                                style={{ 
+                                  width: `${(item.count / stats.totalPools) * 100}%` 
+                                }}
+                              />
+                            </div>
+                            <span className="text-sm text-muted-foreground w-8">
+                              {item.count}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Pool Type Distribution */}
+              {stats && stats.poolTypeDistribution.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Pool-Typ Verteilung</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {stats.poolTypeDistribution.map((item, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <span className="text-sm">{item.type}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-24 bg-secondary rounded-full h-2">
+                              <div 
+                                className="bg-primary h-2 rounded-full" 
+                                style={{ 
+                                  width: `${(item.count / stats.totalPools) * 100}%` 
+                                }}
+                              />
+                            </div>
+                            <span className="text-sm text-muted-foreground w-8">
+                              {item.count}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Utilization Overview */}
+              {stats && stats.averageUtilization > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Pool-Auslastung</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold mb-2">
+                        {stats.averageUtilization}%
+                      </div>
+                      <p className="text-muted-foreground">
+                        Durchschnittliche Auslastung
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Expiring Access */}
+              {stats && stats.expiringPools > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <IconClock className="h-5 w-5 text-orange-500" />
+                      Ablaufende Zugriffe
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-center">
+                      <div className="text-3xl font-bold text-orange-600 mb-2">
+                        {stats.expiringPools}
+                      </div>
+                      <p className="text-muted-foreground">
+                        Pool(s) laufen in 30 Tagen ab
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          </DialogContent>
-        </Dialog>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

@@ -110,14 +110,20 @@ export default function CompanyPoolDetailPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    if (poolId && profile?.company_id) {
+    if (poolId && profile?.id) {
       loadPoolData();
     }
-  }, [poolId, profile?.company_id]);
+  }, [poolId, profile?.id]);
 
   useEffect(() => {
     filterCandidates();
   }, [candidates, searchTerm, skillFilter, selectionFilter, priorityFilter]);
+
+  // New useEffect: Call loadStats whenever candidates change
+  useEffect(() => {
+    console.log('🔄 Candidates changed, updating stats...', candidates.length);
+    loadStats();
+  }, [candidates]);
 
   async function loadPoolData() {
     try {
@@ -137,7 +143,7 @@ export default function CompanyPoolDetailPage() {
           )
         `)
         .eq("pool_id", poolId)
-        .eq("company_id", profile?.company_id)
+        .eq("company_id", profile?.id)
         .single();
 
       if (accessError) {
@@ -167,13 +173,17 @@ export default function CompanyPoolDetailPage() {
           expires_at: access.expires_at
         };
 
+        console.log('🏊 Pool details loaded:', {
+          poolName: poolDetail.name,
+          actualCandidates: candidateCount,
+          maxCandidates: access.pool?.max_candidates,
+          poolData: access.pool
+        });
+
         setPool(poolDetail);
 
-        // Load pool candidates
+        // Load pool candidates (this will trigger loadStats via useEffect)
         await loadCandidates();
-
-        // Load statistics
-        await loadStats();
       }
     } catch (error) {
       console.error("Error loading pool data:", error);
@@ -184,6 +194,8 @@ export default function CompanyPoolDetailPage() {
   }
 
   async function loadCandidates() {
+    console.log('👥 loadCandidates called');
+    
     try {
       const { data: assignments, error: assignmentsError } = await supabase
         .from("pool_candidates")
@@ -195,9 +207,8 @@ export default function CompanyPoolDetailPage() {
             last_name,
             email,
             skills,
-            current_position,
             location,
-            experience_years
+            experience
           )
         `)
         .eq("pool_id", poolId)
@@ -206,28 +217,37 @@ export default function CompanyPoolDetailPage() {
       if (assignmentsError) throw assignmentsError;
 
       if (assignments) {
+        console.log('👥 Loaded assignments:', assignments.length);
+        
         // Get existing selections for this company
         const { data: selections, error: selectionsError } = await supabase
           .from("candidate_selections")
           .select("candidate_id, selection_type")
-          .eq("company_id", profile?.company_id)
+          .eq("company_id", profile?.id)
           .eq("pool_id", poolId);
 
-        if (selectionsError) throw selectionsError;
+        if (selectionsError) {
+          console.error('❌ Error loading selections:', selectionsError);
+          throw selectionsError;
+        }
+
+        console.log('🎯 Loaded selections:', selections?.length || 0, selections);
 
         const selectionsMap = new Map(
           selections?.map(s => [s.candidate_id, s.selection_type]) || []
         );
 
+        console.log('🗺️ Selections map:', Array.from(selectionsMap.entries()));
+
         const enrichedCandidates = assignments.map(assignment => {
           const selectionType = selectionsMap.get(assignment.candidate_id);
-          return {
+          const candidate = {
             id: assignment.id,
             candidate_id: assignment.candidate_id,
             first_name: assignment.candidate?.first_name || "",
             last_name: assignment.candidate?.last_name || "",
             email: assignment.candidate?.email || "",
-            position: assignment.candidate?.current_position,
+            position: undefined, // Not available in current schema
             skills: Array.isArray(assignment.candidate?.skills) ? assignment.candidate.skills : [],
             priority: assignment.priority,
             featured: assignment.featured,
@@ -235,19 +255,28 @@ export default function CompanyPoolDetailPage() {
             isSelected: !!selectionType,
             selectionType: selectionType,
             location: assignment.candidate?.location,
-            experience_years: assignment.candidate?.experience_years
+            experience_years: assignment.candidate?.experience || 0
           } as PoolCandidate;
+          
+          if (candidate.isSelected) {
+            console.log('✅ Found selected candidate:', candidate.first_name, candidate.last_name, 'Type:', candidate.selectionType);
+          }
+          
+          return candidate;
         });
 
+        console.log('👥 Setting enriched candidates:', enrichedCandidates.length, 'Selected:', enrichedCandidates.filter(c => c.isSelected).length);
         setCandidates(enrichedCandidates);
       }
     } catch (error) {
-      console.error("Error loading candidates:", error);
+      console.error("❌ Error loading candidates:", error);
       toast.error("Fehler beim Laden der Kandidaten");
     }
   }
 
   async function loadStats() {
+    console.log('📊 loadStats called, candidates count:', candidates.length);
+    
     try {
       // Total candidates
       const totalCandidates = candidates.length;
@@ -257,13 +286,26 @@ export default function CompanyPoolDetailPage() {
 
       // My selections
       const mySelections = candidates.filter(c => c.isSelected).length;
+      
+      console.log('📊 Stats calculation:', {
+        totalCandidates,
+        featuredCandidates,
+        mySelections,
+        candidatesWithSelection: candidates.filter(c => c.isSelected).map(c => ({
+          name: c.first_name + ' ' + c.last_name,
+          selectionType: c.selectionType,
+          isSelected: c.isSelected
+        }))
+      });
 
       // Skills overview
       const skillCounts: { [key: string]: number } = {};
       candidates.forEach(candidate => {
-        candidate.skills.forEach(skill => {
-          skillCounts[skill] = (skillCounts[skill] || 0) + 1;
-        });
+        if (candidate.skills && Array.isArray(candidate.skills)) {
+          candidate.skills.forEach(skill => {
+            skillCounts[skill] = (skillCounts[skill] || 0) + 1;
+          });
+        }
       });
 
       const skillsOverview = Object.entries(skillCounts)
@@ -272,7 +314,7 @@ export default function CompanyPoolDetailPage() {
         .slice(0, 10);
 
       // Average experience
-      const experienceCandidates = candidates.filter(c => c.experience_years !== undefined);
+      const experienceCandidates = candidates.filter(c => c.experience_years !== undefined && c.experience_years > 0);
       const averageExperience = experienceCandidates.length > 0
         ? experienceCandidates.reduce((sum, c) => sum + (c.experience_years || 0), 0) / experienceCandidates.length
         : 0;
@@ -295,16 +337,29 @@ export default function CompanyPoolDetailPage() {
         .map(([type, count]) => ({ type, count }))
         .filter(item => item.count > 0);
 
-      setStats({
+      const newStats = {
         totalCandidates,
         featuredCandidates,
         mySelections,
         skillsOverview,
         averageExperience: Math.round(averageExperience * 10) / 10,
         selectionTypes
-      });
+      };
+
+      console.log('📊 Setting new stats:', newStats);
+      setStats(newStats);
     } catch (error) {
-      console.error("Error loading stats:", error);
+      console.error("❌ Error loading stats:", error);
+      
+      // Set default stats in case of error
+      setStats({
+        totalCandidates: 0,
+        featuredCandidates: 0,
+        mySelections: 0,
+        skillsOverview: [],
+        averageExperience: 0,
+        selectionTypes: []
+      });
     }
   }
 
@@ -353,13 +408,23 @@ export default function CompanyPoolDetailPage() {
   }
 
   async function handleCandidateSelection(candidate: PoolCandidate, selectionType: "interested" | "shortlisted" | "contacted" | "rejected") {
+    console.log('🎯 handleCandidateSelection called:', {
+      candidate: candidate.first_name + ' ' + candidate.last_name,
+      selectionType,
+      poolAccessLevel: pool?.access_level,
+      profileId: profile?.id
+    });
+
     try {
       if (pool?.access_level === "view") {
         toast.error("Sie haben nur Ansichtsberechtigung für diesen Pool");
         return;
       }
 
+      console.log('🔄 Starting database operation...');
+
       if (candidate.isSelected) {
+        console.log('📝 Updating existing selection...');
         // Update existing selection
         const { error } = await supabase
           .from("candidate_selections")
@@ -367,34 +432,43 @@ export default function CompanyPoolDetailPage() {
             selection_type: selectionType,
             updated_at: new Date().toISOString()
           })
-          .eq("company_id", profile?.company_id)
+          .eq("company_id", profile?.id)
           .eq("candidate_id", candidate.candidate_id)
           .eq("pool_id", poolId);
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Update error:', error);
+          throw error;
+        }
+        console.log('✅ Update successful');
       } else {
+        console.log('➕ Creating new selection...');
         // Create new selection
         const { error } = await supabase
           .from("candidate_selections")
           .insert({
-            company_id: profile?.company_id,
+            company_id: profile?.id,
             candidate_id: candidate.candidate_id,
             pool_id: poolId,
-            selected_by: profile?.id,
             selection_type: selectionType
           });
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ Insert error:', error);
+          throw error;
+        }
+        console.log('✅ Insert successful');
       }
 
       toast.success("Auswahl aktualisiert");
       
-      // Reload candidates and stats
+      console.log('🔄 Reloading data...');
+      // Reload candidates (this will trigger loadStats via useEffect)
       await loadCandidates();
-      await loadStats();
+      console.log('✅ Data reloaded');
       
     } catch (error) {
-      console.error("Error updating candidate selection:", error);
+      console.error("❌ Error updating candidate selection:", error);
       toast.error("Fehler beim Aktualisieren der Auswahl");
     }
   }
@@ -562,52 +636,92 @@ export default function CompanyPoolDetailPage() {
     {
       id: "actions",
       header: "Aktionen",
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">
-              Aktionen
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem 
-              onClick={() => handleCandidateSelection(row.original, "interested")}
-              disabled={pool?.access_level === "view"}
-            >
-              <IconHeart className="h-4 w-4 mr-2" />
-              Interessiert
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={() => handleCandidateSelection(row.original, "shortlisted")}
-              disabled={pool?.access_level === "view"}
-            >
-              <IconStar className="h-4 w-4 mr-2" />
-              Shortlist
-            </DropdownMenuItem>
-            {pool?.access_level === "contact" && (
+      cell: ({ row }) => {
+        const handleActionClick = (action: string) => {
+          console.log('Action clicked:', action, 'Pool access level:', pool?.access_level);
+          
+          if (pool?.access_level === "view") {
+            toast.error("Sie haben nur Ansichtsberechtigung für diesen Pool");
+            return;
+          }
+
+          switch (action) {
+            case "interested":
+              handleCandidateSelection(row.original, "interested");
+              break;
+            case "shortlisted":
+              handleCandidateSelection(row.original, "shortlisted");
+              break;
+            case "contact":
+              setContactingCandidate(row.original);
+              setContactForm({
+                subject: `Stellenausschreibung - ${row.original.first_name} ${row.original.last_name}`,
+                message: `Hallo ${row.original.first_name},\n\nwir haben Ihr Profil in unserem Kandidatenpool gesehen und würden gerne mit Ihnen über mögliche Karrierechancen sprechen.\n\nBeste Grüße\n${profile?.company_name || "Unser Team"}`
+              });
+              break;
+            case "rejected":
+              handleCandidateSelection(row.original, "rejected");
+              break;
+          }
+        };
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                Aktionen
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem 
-                onClick={() => {
-                  setContactingCandidate(row.original);
-                  setContactForm({
-                    subject: `Stellenausschreibung - ${row.original.first_name} ${row.original.last_name}`,
-                    message: `Hallo ${row.original.first_name},\n\nwir haben Ihr Profil in unserem Kandidatenpool gesehen und würden gerne mit Ihnen über mögliche Karrierechancen sprechen.\n\nBeste Grüße\n${profile?.company_name || "Unser Team"}`
-                  });
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleActionClick("interested");
                 }}
+                className="cursor-pointer"
               >
-                <IconMail className="h-4 w-4 mr-2" />
-                Kontaktieren
+                <IconHeart className="h-4 w-4 mr-2" />
+                Interessiert
               </DropdownMenuItem>
-            )}
-            <DropdownMenuItem 
-              onClick={() => handleCandidateSelection(row.original, "rejected")}
-              disabled={pool?.access_level === "view"}
-            >
-              <IconEye className="h-4 w-4 mr-2" />
-              Ablehnen
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+              
+              <DropdownMenuItem 
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleActionClick("shortlisted");
+                }}
+                className="cursor-pointer"
+              >
+                <IconStar className="h-4 w-4 mr-2" />
+                Shortlist
+              </DropdownMenuItem>
+              
+              {pool?.access_level === "contact" && (
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleActionClick("contact");
+                  }}
+                  className="cursor-pointer"
+                >
+                  <IconMail className="h-4 w-4 mr-2" />
+                  Kontaktieren
+                </DropdownMenuItem>
+              )}
+              
+              <DropdownMenuItem 
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleActionClick("rejected");
+                }}
+                className="cursor-pointer text-red-600 focus:text-red-600"
+              >
+                <IconEye className="h-4 w-4 mr-2" />
+                Ablehnen
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
     },
   ];
 
@@ -627,85 +741,121 @@ export default function CompanyPoolDetailPage() {
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <Link 
-            href="/dashboard/company/pools"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <IconArrowLeft className="h-4 w-4" />
-            Zurück zu Pools
-          </Link>
-        </div>
-
-        <div className="space-y-2 mb-6">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">{pool.name}</h1>
-            {getPoolTypeBadge(pool.pool_type)}
-            {getAccessLevelBadge(pool.access_level)}
-          </div>
-          {pool.description && (
-            <p className="text-muted-foreground">{pool.description}</p>
-          )}
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span>Zugewiesen am: {new Date(pool.assigned_at).toLocaleDateString("de-DE")}</span>
-            {pool.expires_at && (
-              <span>Läuft ab: {new Date(pool.expires_at).toLocaleDateString("de-DE")}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Metrics */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Kandidaten gesamt</CardTitle>
-              <IconUsers className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalCandidates}</div>
-              {pool.max_candidates && (
-                <p className="text-xs text-muted-foreground">
-                  von max. {pool.max_candidates}
-                </p>
+        {/* Pool Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard/company/pools">
+              <Button variant="outline" size="sm">
+                <IconArrowLeft className="h-4 w-4 mr-2" />
+                Zurück zu Pools
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">{pool?.name}</h1>
+              <div className="flex items-center gap-3 mt-2">
+                {getPoolTypeBadge(pool?.pool_type || "custom")}
+                {getAccessLevelBadge(pool?.access_level || "view")}
+                {pool?.expires_at && (
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    <IconCalendar className="h-3 w-3" />
+                    Läuft ab: {new Date(pool.expires_at).toLocaleDateString("de-DE")}
+                  </Badge>
+                )}
+              </div>
+              {pool?.description && (
+                <p className="text-muted-foreground mt-2 max-w-2xl">{pool.description}</p>
               )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => loadPoolData()}>
+              <IconChartBar className="h-4 w-4 mr-2" />
+              Aktualisieren
+            </Button>
+          </div>
+        </div>
+
+        {/* Pool Stats */}
+        <div className="grid gap-4 md:grid-cols-4 mb-6">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Kandidaten</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-2xl font-bold">{stats?.totalCandidates || 0}</p>
+                    {pool?.max_candidates && (
+                      <span className="text-muted-foreground">/ {pool.max_candidates}</span>
+                    )}
+                  </div>
+                  {pool?.max_candidates && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="w-16 bg-secondary rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full ${
+                            ((stats?.totalCandidates || 0) / pool.max_candidates) >= 0.9 ? 'bg-red-500' :
+                            ((stats?.totalCandidates || 0) / pool.max_candidates) >= 0.8 ? 'bg-orange-500' :
+                            ((stats?.totalCandidates || 0) / pool.max_candidates) >= 0.6 ? 'bg-yellow-500' :
+                            'bg-green-500'
+                          }`}
+                          style={{ width: `${Math.min(((stats?.totalCandidates || 0) / pool.max_candidates) * 100, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {Math.round(((stats?.totalCandidates || 0) / pool.max_candidates) * 100)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <IconUsers className="h-8 w-8 text-blue-600" />
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Featured</CardTitle>
-              <IconStar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.featuredCandidates}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.totalCandidates > 0 ? Math.round((stats.featuredCandidates / stats.totalCandidates) * 100) : 0}% der Kandidaten
-              </p>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Featured</p>
+                  <p className="text-2xl font-bold">{stats?.featuredCandidates || 0}</p>
+                  {stats?.totalCandidates && stats.totalCandidates > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {Math.round((stats.featuredCandidates / stats.totalCandidates) * 100)}% aller Kandidaten
+                    </p>
+                  )}
+                </div>
+                <IconStar className="h-8 w-8 text-yellow-600" />
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Meine Auswahlen</CardTitle>
-              <IconHeart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.mySelections}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.totalCandidates > 0 ? Math.round((stats.mySelections / stats.totalCandidates) * 100) : 0}% ausgewählt
-              </p>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Meine Auswahlen</p>
+                  <p className="text-2xl font-bold">{stats?.mySelections || 0}</p>
+                </div>
+                <IconHeart className="h-8 w-8 text-red-600" />
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Ø Erfahrung</CardTitle>
-              <IconBriefcase className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.averageExperience}</div>
-              <p className="text-xs text-muted-foreground">Jahre Berufserfahrung</p>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Zugriffslevel</p>
+                  <p className="text-sm font-medium">
+                    {pool?.access_level === "contact" ? "Vollzugriff" :
+                     pool?.access_level === "select" ? "Auswählen" : "Nur Ansicht"}
+                  </p>
+                  {pool?.access_level === "contact" && (
+                    <p className="text-xs text-green-600">Kandidaten kontaktieren</p>
+                  )}
+                </div>
+                <IconBriefcase className="h-8 w-8 text-green-600" />
+              </div>
             </CardContent>
           </Card>
         </div>

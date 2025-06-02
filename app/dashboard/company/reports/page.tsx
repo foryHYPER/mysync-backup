@@ -33,28 +33,43 @@ export default function CompanyReportsPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    loadReportData();
-  }, []);
+    if (profile?.id) {
+      loadReportData();
+    }
+  }, [profile?.id]);
 
   async function loadReportData() {
     try {
       setLoading(true);
 
-      if (!profile?.company_id) {
-        throw new Error("Keine Unternehmens-ID verfügbar");
+      console.log('🔍 Profile data:', profile);
+      console.log('🆔 Profile ID:', profile?.id);
+      console.log('👤 Profile role:', profile?.role);
+
+      if (!profile?.id) {
+        console.error('❌ No profile.id available');
+        throw new Error("Keine Benutzer-ID verfügbar");
       }
+
+      // For companies, the profile.id IS the company_id
+      const companyId = profile.id;
+      console.log('🏢 Using company ID:', companyId);
 
       // Get pool access count
       const { count: poolsAccess } = await supabase
         .from("pool_company_access")
         .select("*", { count: "exact", head: true })
-        .eq("company_id", profile.company_id);
+        .eq("company_id", companyId);
+
+      console.log('🏊 Pool access count:', poolsAccess);
 
       // Get total selections
       const { count: totalSelections } = await supabase
         .from("candidate_selections")
         .select("*", { count: "exact", head: true })
-        .eq("company_id", profile.company_id);
+        .eq("company_id", companyId);
+
+      console.log('⭐ Total selections:', totalSelections);
 
       // Get this month's selections
       const oneMonthAgo = new Date();
@@ -63,8 +78,10 @@ export default function CompanyReportsPage() {
       const { count: thisMonthSelections } = await supabase
         .from("candidate_selections")
         .select("*", { count: "exact", head: true })
-        .eq("company_id", profile.company_id)
+        .eq("company_id", companyId)
         .gte("created_at", oneMonthAgo.toISOString());
+
+      console.log('📅 This month selections:', thisMonthSelections);
 
       // Get top skills from selected candidates
       const { data: selectionsData } = await supabase
@@ -72,7 +89,9 @@ export default function CompanyReportsPage() {
         .select(`
           candidate:candidates(skills)
         `)
-        .eq("company_id", profile.company_id);
+        .eq("company_id", companyId);
+
+      console.log('🎯 Selections data:', selectionsData);
 
       const skillCounts: { [key: string]: number } = {};
       if (selectionsData) {
@@ -91,17 +110,22 @@ export default function CompanyReportsPage() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
-      setStats({
+      console.log('🔧 Top skills:', topSkills);
+
+      const newStats = {
         totalPoolsAccess: poolsAccess || 0,
         totalCandidatesViewed: 0, // This would need access logs implementation
         totalSelections: totalSelections || 0,
         thisMonthSelections: thisMonthSelections || 0,
         averageResponseTime: 2.3, // Mock data
         topSkills
-      });
+      };
+
+      console.log('📊 Setting stats:', newStats);
+      setStats(newStats);
 
     } catch (error) {
-      console.error("Error loading report data:", error);
+      console.error("❌ Error loading report data:", error);
       toast.error("Fehler beim Laden der Report-Daten");
     } finally {
       setLoading(false);

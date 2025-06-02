@@ -492,13 +492,13 @@ export default function CandidateProfilePage() {
             </Card>
 
             {/* Professional Information */}
-            <Card>
-              <CardHeader>
+        <Card>
+          <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Briefcase className="h-5 w-5" />
                   Berufliche Informationen
                 </CardTitle>
-              </CardHeader>
+          </CardHeader>
               <CardContent className="space-y-6">
                 {/* File Upload Section */}
                 <div className="space-y-4">
@@ -645,8 +645,8 @@ export default function CandidateProfilePage() {
                     </FormItem>
                   )}
                 />
-              </CardContent>
-            </Card>
+          </CardContent>
+        </Card>
 
             {/* Save Button */}
             <div className="flex justify-end">
