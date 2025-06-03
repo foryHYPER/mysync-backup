@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { SectionCards } from "@/components/section-cards";
-import { ChartAreaInteractive } from "@/components/chart-area-interactive";
 import { DataTable } from "@/components/data-table";
 import { useProfile } from "@/context/ProfileContext";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +9,27 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { 
+  IconBriefcase, 
+  IconChartAreaLine, 
+  IconClock,
+  IconTrendingUp,
+  IconUsers,
+  IconEye,
+  IconMessage,
+  IconStar,
+  IconCalendar,
+  IconTarget,
+  IconActivity,
+  IconTrendingDown,
+  IconArrowRight
+} from "@tabler/icons-react";
+import { CandidateMatchChart } from "@/components/candidate-match-chart";
+import { CandidateStatusChart } from "@/components/candidate-status-chart";
+import { CandidateMonthlyChart } from "@/components/candidate-monthly-chart";
+import { CandidateSuccessMetrics } from "@/components/candidate-success-metrics";
 
 type Application = {
   id: string;
@@ -19,6 +39,8 @@ type Application = {
   match_score: string;
   created_at: string;
   location: string;
+  raw_created_at: string;
+  raw_match_score: number;
 };
 
 type RawMatch = {
@@ -42,6 +64,20 @@ type DashboardStats = {
   interviewInvitations: number;
   topMatchScore: number;
   responseRate: number;
+  thisWeekApplications: number;
+  thisMonthApplications: number;
+  matchTrend: 'up' | 'down' | 'neutral';
+  skillsInDemand: string[];
+  nextSteps: string[];
+};
+
+type ActivityItem = {
+  id: string;
+  type: 'match' | 'invitation' | 'response' | 'update';
+  title: string;
+  description: string;
+  time: string;
+  status: 'success' | 'pending' | 'info';
 };
 
 const candidateColumns: ColumnDef<Application>[] = [
@@ -107,13 +143,19 @@ const candidateColumns: ColumnDef<Application>[] = [
 export default function CandidateDashboard() {
   const profile = useProfile();
   const [applications, setApplications] = useState<Application[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalApplications: 0,
     activeApplications: 0,
     averageMatchScore: 0,
     interviewInvitations: 0,
     topMatchScore: 0,
-    responseRate: 0
+    responseRate: 0,
+    thisWeekApplications: 0,
+    thisMonthApplications: 0,
+    matchTrend: 'neutral',
+    skillsInDemand: [],
+    nextSteps: []
   });
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -147,18 +189,37 @@ export default function CandidateDashboard() {
             status: getStatusText(match.status),
             match_score: `${Math.round(match.match_score)}%`,
             created_at: new Date(match.created_at).toLocaleDateString("de-DE"),
-            location: match.job_postings?.location || "Remote"
+            location: match.job_postings?.location || "Remote",
+            raw_created_at: match.created_at,
+            raw_match_score: match.match_score
           }));
           setApplications(formattedData);
 
-          // Calculate dashboard stats
+          // Enhanced dashboard stats calculation
+          const now = new Date();
+          const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          
           const totalApps = matches.length;
           const activeApps = matches.filter(m => m.status === "pending" || m.status === "reviewed").length;
-          const avgScore = matches.reduce((acc, m) => acc + m.match_score, 0) / totalApps;
+          const avgScore = totalApps > 0 ? matches.reduce((acc, m) => acc + m.match_score, 0) / totalApps : 0;
           const invitations = matches.filter(m => m.status === "contacted").length;
-          const topScore = Math.max(...matches.map(m => m.match_score));
+          const topScore = totalApps > 0 ? Math.max(...matches.map(m => m.match_score)) : 0;
           const responses = matches.filter(m => m.status !== "pending").length;
-          const responseRate = (responses / totalApps) * 100;
+          const responseRate = totalApps > 0 ? (responses / totalApps) * 100 : 0;
+          
+          const thisWeekApps = matches.filter(m => new Date(m.created_at) >= oneWeekAgo).length;
+          const thisMonthApps = matches.filter(m => new Date(m.created_at) >= oneMonthAgo).length;
+          
+          // Calculate match trend
+          const recentMatches = matches.filter(m => new Date(m.created_at) >= oneWeekAgo);
+          const olderMatches = matches.filter(m => new Date(m.created_at) < oneWeekAgo && new Date(m.created_at) >= oneMonthAgo);
+          const recentAvg = recentMatches.length > 0 ? recentMatches.reduce((acc, m) => acc + m.match_score, 0) / recentMatches.length : avgScore;
+          const olderAvg = olderMatches.length > 0 ? olderMatches.reduce((acc, m) => acc + m.match_score, 0) / olderMatches.length : avgScore;
+          
+          let matchTrend: 'up' | 'down' | 'neutral' = 'neutral';
+          if (recentAvg > olderAvg + 5) matchTrend = 'up';
+          else if (recentAvg < olderAvg - 5) matchTrend = 'down';
 
           setStats({
             totalApplications: totalApps,
@@ -166,8 +227,28 @@ export default function CandidateDashboard() {
             averageMatchScore: Math.round(avgScore),
             interviewInvitations: invitations,
             topMatchScore: Math.round(topScore),
-            responseRate: Math.round(responseRate)
+            responseRate: Math.round(responseRate),
+            thisWeekApplications: thisWeekApps,
+            thisMonthApplications: thisMonthApps,
+            matchTrend,
+            skillsInDemand: ["React", "TypeScript", "Node.js"], // Mock data - could be enhanced with real analysis
+            nextSteps: [
+              "Profil aktualisieren",
+              "Neue Skills hinzufügen", 
+              "Portfolio erweitern"
+            ]
           });
+
+          // Generate activity timeline
+          const activities: ActivityItem[] = matches.slice(0, 5).map((match, index) => ({
+            id: match.id,
+            type: match.status === 'contacted' ? 'invitation' : 'match',
+            title: match.status === 'contacted' ? 'Interview-Einladung erhalten' : 'Neuer Job-Match',
+            description: `${match.job_postings?.companies?.name} - ${match.job_postings?.title}`,
+            time: new Date(match.created_at).toLocaleDateString("de-DE"),
+            status: match.status === 'contacted' ? 'success' : match.status === 'pending' ? 'pending' : 'info'
+          }));
+          setActivities(activities);
         }
       } catch (error) {
         console.error("Fehler beim Laden der Daten:", error);
@@ -193,104 +274,271 @@ export default function CandidateDashboard() {
   const pageCount = Math.ceil(applications.length / pageSize);
 
   return (
-    <main className="container mx-auto p-8 space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Willkommen zurück! Hier finden Sie eine Übersicht Ihrer Bewerbungen und Statistiken.
-        </p>
-      </div>
+    <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+      <div className="px-4 lg:px-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground">
+              Willkommen zurück! Hier ist Ihre aktuelle Karriere-Übersicht.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm">
+              <IconActivity className="h-4 w-4 mr-2" />
+              Aktivitäten
+            </Button>
+            <Button size="sm">
+              <IconTarget className="h-4 w-4 mr-2" />
+              Profil optimieren
+            </Button>
+          </div>
+        </div>
 
-      <div className="grid grid-cols-1 gap-8">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Enhanced Stats Grid */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Aktive Bewerbungen</CardTitle>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                className="h-4 w-4 text-muted-foreground"
-              >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.activeApplications}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.activeApplications > 0 ? "+2" : "0"} seit letztem Monat
-              </p>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Aktive Bewerbungen</p>
+                  <p className="text-2xl font-bold">{stats.activeApplications}</p>
+                  <div className="flex items-center mt-2">
+                    <Badge variant="secondary" className="text-xs">
+                      +{stats.thisWeekApplications} diese Woche
+                    </Badge>
+                  </div>
+                </div>
+                <IconBriefcase className="h-8 w-8 text-blue-600" />
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Durchschnittlicher Match</CardTitle>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                className="h-4 w-4 text-muted-foreground"
-              >
-                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-              </svg>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.averageMatchScore}%</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.averageMatchScore > 0 ? "+5%" : "0%"} seit letztem Monat
-              </p>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Durchschn. Match</p>
+                  <p className="text-2xl font-bold">{stats.averageMatchScore}%</p>
+                  <div className="flex items-center mt-2">
+                    {stats.matchTrend === 'up' ? (
+                      <IconTrendingUp className="h-3 w-3 text-green-600 mr-1" />
+                    ) : stats.matchTrend === 'down' ? (
+                      <IconTrendingDown className="h-3 w-3 text-red-600 mr-1" />
+                    ) : null}
+                    <span className="text-xs text-muted-foreground">
+                      Trend: {stats.matchTrend === 'up' ? 'Steigend' : stats.matchTrend === 'down' ? 'Fallend' : 'Stabil'}
+                    </span>
+                  </div>
+                </div>
+                <IconChartAreaLine className="h-8 w-8 text-green-600" />
+              </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Interview-Einladungen</CardTitle>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                className="h-4 w-4 text-muted-foreground"
-              >
-                <path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-              </svg>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.interviewInvitations}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.interviewInvitations > 0 ? "+1" : "0"} seit letztem Monat
-              </p>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Interview-Einladungen</p>
+                  <p className="text-2xl font-bold">{stats.interviewInvitations}</p>
+                  <div className="mt-2">
+                    <Progress value={(stats.interviewInvitations / Math.max(stats.totalApplications, 1)) * 100} className="h-2" />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {Math.round((stats.interviewInvitations / Math.max(stats.totalApplications, 1)) * 100)}% Erfolgsrate
+                    </p>
+                  </div>
+                </div>
+                <IconMessage className="h-8 w-8 text-purple-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Top Match-Score</p>
+                  <p className="text-2xl font-bold">{stats.topMatchScore}%</p>
+                  <div className="flex items-center mt-2">
+                    <IconStar className="h-3 w-3 text-yellow-500 mr-1" />
+                    <span className="text-xs text-muted-foreground">
+                      Bester Match
+                    </span>
+                  </div>
+                </div>
+                <IconTarget className="h-8 w-8 text-yellow-600" />
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Match-Entwicklung</CardTitle>
-            <CardDescription>
-              Entwicklung Ihrer Match-Scores über die Zeit
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartAreaInteractive />
-          </CardContent>
-        </Card>
+        {/* Activity Timeline & Quick Stats */}
+        <div className="grid gap-6 md:grid-cols-2 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <IconActivity className="h-5 w-5" />
+                Letzte Aktivitäten
+              </CardTitle>
+              <CardDescription>
+                Ihre neuesten Bewerbungs-Updates
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {activities.length > 0 ? (
+                <div className="space-y-4">
+                  {activities.map((activity, index) => (
+                    <div key={activity.id} className="flex gap-3">
+                      <div className={`w-2 h-2 rounded-full mt-2 ${
+                        activity.status === 'success' ? 'bg-green-500' :
+                        activity.status === 'pending' ? 'bg-yellow-500' : 'bg-blue-500'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{activity.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{activity.description}</p>
+                        <p className="text-xs text-muted-foreground">{activity.time}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <IconActivity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Noch keine Aktivitäten vorhanden</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <IconTrendingUp className="h-5 w-5" />
+                Nächste Schritte
+              </CardTitle>
+              <CardDescription>
+                Empfehlungen zur Optimierung Ihres Profils
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {stats.nextSteps.map((step, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                    <span className="text-sm">{step}</span>
+                    <IconArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                ))}
+                
+                <div className="p-3 border rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium">Skills im Trend</span>
+                    <IconStar className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    {stats.skillsInDemand.map(skill => (
+                      <Badge key={skill} variant="secondary" className="text-xs">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Charts Section */}
+        <div className="grid gap-6 md:grid-cols-2 mb-6">
+          {/* Match Score Timeline */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <IconChartAreaLine className="h-5 w-5" />
+                Match-Score Entwicklung
+              </CardTitle>
+              <CardDescription>
+                Entwicklung Ihrer Match-Scores über die Zeit
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {applications.length > 0 ? (
+                <CandidateMatchChart data={applications} />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <IconChartAreaLine className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Noch keine Match-Daten verfügbar</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Status Distribution */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <IconUsers className="h-5 w-5" />
+                Status-Verteilung
+              </CardTitle>
+              <CardDescription>
+                Verteilung Ihrer Bewerbungsstatus
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {applications.length > 0 ? (
+                <CandidateStatusChart data={applications} />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <IconUsers className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Noch keine Status-Daten verfügbar</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Monthly Progress & Interview Success */}
+        <div className="grid gap-6 md:grid-cols-2 mb-6">
+          {/* Monthly Progress */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <IconCalendar className="h-5 w-5" />
+                Monatlicher Fortschritt
+              </CardTitle>
+              <CardDescription>
+                Ihre Bewerbungsaktivität pro Monat
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {applications.length > 0 ? (
+                <CandidateMonthlyChart data={applications} />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <IconCalendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Noch keine monatlichen Daten verfügbar</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Success Rate Metrics */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <IconTarget className="h-5 w-5" />
+                Erfolgs-Metriken
+              </CardTitle>
+              <CardDescription>
+                Ihre Bewerbungserfolg im Detail
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CandidateSuccessMetrics data={applications} stats={stats} />
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Applications Table */}
         <Card>
@@ -346,6 +594,6 @@ export default function CandidateDashboard() {
           </CardContent>
         </Card>
       </div>
-    </main>
+    </div>
   );
 } 
